@@ -1,0 +1,14 @@
+
+
+# --- SemVer-Trust provenance trailers (required on every commit) ---
+# Keep trailers as the final block. Pick ONE Provenance value.
+# Human-authored:
+Provenance: human
+# Agent-authored — replace the line above with the following, using
+# whatever agent tooling produced the change (spec §4.1):
+# Provenance: agent
+# Provenance-Agent: <tool>/<version>     e.g. claude-code/2.8, codex/1.4,
+#                                        cursor/0.51, aider/0.86
+# Provenance-Model: <model-id>           optional
+# Mixed human+agent authorship:
+# Provenance: mixed
