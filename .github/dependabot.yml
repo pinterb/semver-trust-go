@@ -1,0 +1,33 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+version: 2
+updates:
+  # Root Go module.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+
+  # Pinned dev/derivation tool module (ADR-015).
+  - package-ecosystem: gomod
+    directory: /tools
+    schedule:
+      interval: weekly
+    groups:
+      go-tools:
+        patterns:
+          - "*"
+
+  # SHA-pinned workflow actions; grouped so bumps land as one PR.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"

@@ -1,0 +1,82 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+name: Commit hygiene
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  commit-hygiene:
+    name: commit-hygiene
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      # Enforcement half of .gitmessage / AGENTS.md provenance discipline: every
+      # commit in the PR must carry a verified signature and a valid Provenance:
+      # trailer. Commit data comes from the GitHub API (not the injectable
+      # github.event.commits context) and is decoded from base64, so no untrusted
+      # commit text ever reaches the shell unquoted.
+      - name: Check signatures and Provenance trailers
+        shell: bash
+        run: |-
+          set -euo pipefail
+
+          # sha <tab> verified <tab> base64(message), one commit per line.
+          gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/commits" \
+            --jq '.[] | [.sha, (.commit.verification.verified | tostring), (.commit.message | @base64)] | @tsv' \
+            > commits.tsv
+
+          if [ ! -s commits.tsv ]; then
+            echo "No commits found on this pull request." >&2
+            exit 1
+          fi
+
+          fail=0
+          report=""
+          while IFS=$'\t' read -r sha verified msg_b64; do
+            short="${sha:0:12}"
+            msg=$(printf '%s' "$msg_b64" | base64 -d)
+            reasons=""
+
+            if [ "$verified" != "true" ]; then
+              reasons="${reasons}; signature not verified"
+            fi
+
+            # Last Provenance: value wins (git treats the final trailer block as
+            # authoritative). Key match is case-insensitive; value must be exact.
+            prov=$(grep -iE '^Provenance:[[:space:]]*' <<<"$msg" \
+              | tail -n1 | sed -E 's/^[^:]*:[[:space:]]*//' | tr -d '[:space:]' || true)
+            case "$prov" in
+              human | agent | mixed) ;;
+              "") reasons="${reasons}; missing Provenance: trailer" ;;
+              *) reasons="${reasons}; invalid Provenance value '${prov}' (want human|agent|mixed)" ;;
+            esac
+
+            if [ "$prov" = "agent" ] \
+              && ! grep -iqE '^Provenance-Agent:[[:space:]]*[^[:space:]]' <<<"$msg"; then
+              reasons="${reasons}; Provenance: agent requires a Provenance-Agent: trailer"
+            fi
+
+            if [ -n "$reasons" ]; then
+              fail=1
+              report="${report}FAIL ${short}:${reasons}"$'\n'
+            else
+              report="${report}OK   ${short}"$'\n'
+            fi
+          done < commits.tsv
+
+          echo "Commit hygiene report:"
+          printf '%s' "$report"
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::One or more commits failed hygiene checks (verified signature + Provenance: trailer)."
+            exit 1
+          fi
+          echo "All commits carry a verified signature and a valid Provenance: trailer."

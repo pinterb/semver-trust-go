@@ -55,7 +55,7 @@ tasks:
     cmds:
       - |
         if [ -d scripts ]; then
-          ruff check scripts/ && ruff format --check scripts/
+          uv run ruff check scripts/ && uv run ruff format --check scripts/
         else
           echo "lint:python: no scripts/ yet, skipping"
         fi
@@ -64,10 +64,8 @@ tasks:
     desc: Run shellcheck on shell scripts
     cmds:
       - |
-        files=$(find scripts -name '*.sh' 2>/dev/null)
-        if [ -n "$files" ]; then
-          # shellcheck disable=SC2086
-          shellcheck $files
+        if [ -d scripts ]; then
+          find scripts -name '*.sh' -exec shellcheck {} +
         else
           echo "lint:bash: no shell scripts yet, skipping"
         fi

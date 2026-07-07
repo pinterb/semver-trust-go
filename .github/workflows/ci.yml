@@ -1,0 +1,59 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      # ADR-018 (plan §6): verification-shaped code must take an injected clock,
+      # never call time.Now(). Runs before devbox so a violation fails fast; the
+      # guarded packages do not exist yet, so this passes on the empty repo.
+      - name: ADR-018 clock-injection guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          guard_dirs="internal/vcs internal/trust internal/attest internal/derive"
+          violations=""
+          for d in $guard_dirs; do
+            [ -d "$d" ] || continue
+            hits=$(grep -rnF --include='*.go' 'time.Now(' "$d" || true)
+            if [ -n "$hits" ]; then
+              violations="${violations}${hits}"$'\n'
+            fi
+          done
+          if [ -n "$violations" ]; then
+            echo "::error::ADR-018 violation: verification packages must take an injected clock, not call time.Now()."
+            printf '%s\n' "$violations"
+            exit 1
+          fi
+          echo "ADR-018 guard passed: no time.Now( under verification packages."
+
+      - name: Install devbox
+        uses: jetify-com/devbox-install-action@8c6a66ed6273138b1915457069de78cb52fe3bd7  # v0.15.0
+        with:
+          enable-cache: 'true'
+
+      # Reuse the Taskfile targets so CI matches local dev exactly. The Go tasks
+      # self-skip when no Go packages exist, keeping this green on the empty repo.
+      - name: Lint
+        run: devbox run -- task lint
+
+      - name: Test
+        run: devbox run -- task test
+
+      - name: Vulnerability scan
+        run: devbox run -- task vuln
