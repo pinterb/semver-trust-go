@@ -1,0 +1,6 @@
+# Vendored / generated trees — not project documentation.
+.venv/
+.devbox/
+.go/
+.claude/
+node_modules/

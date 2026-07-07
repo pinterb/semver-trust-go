@@ -24,9 +24,17 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# Local development environment.
 .env
+.devbox/
+.venv/
+.envrc
+.env.local
+excalidraw.log
 
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json

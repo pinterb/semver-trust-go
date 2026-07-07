@@ -1,0 +1,60 @@
+---
+# Markdownlint configuration
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+# Default state for all rules
+default: true
+
+# Line length
+MD013:
+  line_length: 120
+  code_blocks: false
+  tables: false
+
+# Inline HTML
+MD033:
+  allowed_elements:
+    - br
+    - p
+    - details
+    - summary
+
+# First line should be a top-level heading
+MD041: false
+
+# Multiple consecutive blank lines
+MD012:
+  maximum: 2
+
+# No trailing punctuation in heading
+MD026:
+  punctuation: ".,;:!"
+
+# Duplicate headings (allow same heading in different sections for templates)
+MD024:
+  siblings_only: true
+
+# Hard tabs (allow in code blocks for Go code)
+MD010:
+  code_blocks: false
+
+# Code block style
+MD046:
+  style: fenced
+
+# Emphasis style
+MD049:
+  style: asterisk
+
+# Strong style
+MD050:
+  style: asterisk
+
+# Fenced code language (workflow diagrams don't need language)
+MD040: false
+
+# Emphasis as heading (bold text in docs is acceptable)
+MD036: false
+
+# Table column style (compact style without padded separators is acceptable)
+MD060: false

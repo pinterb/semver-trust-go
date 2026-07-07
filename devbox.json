@@ -1,0 +1,33 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.17.5/.schema/devbox.schema.json",
+  "packages": [
+    "gh@latest",
+    "go-task@latest",
+    "markdownlint-cli@latest",
+    "yamlfmt@latest",
+    "yq-go@latest",
+    "jsonfmt@latest",
+    "jq@latest",
+    "shellcheck@latest",
+    "shfmt@latest",
+    "gitlint@latest",
+    "gitleaks@latest",
+    "actionlint@latest",
+    "uv@0.11.19",
+    "python@3.14.4",
+    "go@1.26.4"
+  ],
+  "env": {
+    "VENV_DIR":           "$PWD/.venv"
+  },
+  "shell": {
+    "init_hook": [
+      "echo 'Welcome to devbox!' > /dev/null"
+    ],
+    "scripts": {
+      "uv-sync":  "uv sync --group dev --no-install-project",
+      "lint":     "uv run ruff check .",
+      "format":   "uv run ruff format ."
+    }
+  }
+}

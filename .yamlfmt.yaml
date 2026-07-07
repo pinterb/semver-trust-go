@@ -1,0 +1,43 @@
+---
+
+# yamlfmt configuration to fix as many yamllint errors as possible
+formatter:
+  type: basic
+
+  # Indentation (fixes: yamllint indentation rule)
+  indent: 2
+  indentless_arrays: false  # Match yamllint default (arrays ARE indented)
+
+  # Line endings (fixes: yamllint new-lines rule)
+  line_ending: lf
+
+  # Document markers (fixes: yamllint document-start rule)
+  include_document_start: true  # Set to false if you do want --- markers
+
+  # Line breaks (fixes: yamllint empty-lines rule)
+  retain_line_breaks_single: true  # Keep single blank lines, remove multiple
+
+  # Trailing whitespace (fixes: yamllint trailing-spaces rule)
+  trim_trailing_whitespace: true
+
+  # End of file newline (fixes: yamllint new-line-at-end-of-file rule)
+  eof_newline: true
+
+  # Line length (fixes: yamllint line-length rule)
+  max_line_length: 110  # Set to 0 for unlimited, or match your preference
+
+  # Comments (fixes: yamllint comments-indentation partially)
+  pad_line_comments: 2  # Ensures proper spacing before comments
+
+  # Optional: String handling
+  scan_folded_as_literal: false  # Preserve newlines in folded blocks
+  drop_merge_tag: false  # Keep merge tags if used
+  disallow_anchors: false
+
+# Path configuration
+include:
+  - '**/*.yaml'
+  - '**/*.yml'
+
+exclude:
+  - ".git/**"

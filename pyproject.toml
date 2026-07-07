@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: Apache-2.0
+# Tooling configuration for this repository's scripts.
+#
+# Deliberately dependency-free: scripts/ must run on bare Python
+# (>= 3.11, for tomllib) so CI needs no install step and contributors
+# need nothing beyond `devbox shell`. Adding a [project.dependencies]
+# entry here is a decision, not a convenience — see docs/adr/.
+
+[project]
+name = "semver-trust-spec-scripts"
+version = "0.0.0"
+description = "Consistency checks and maintenance scripts for semver-trust/spec"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.9",
+    "ty>=0.0.1a1",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+    ".agents",
+    ".claude",
+    ".codex",
+    ".devbox",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "TCH", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"
+

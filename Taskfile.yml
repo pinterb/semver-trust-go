@@ -1,0 +1,167 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+version: "3"
+
+vars:
+  # Go dev tools are pinned in a separate module (see tools/README.md) and
+  # invoked via `go tool -modfile=...`.
+  TOOL_MODFILE: tools/go.mod
+
+tasks:
+  default:
+    desc: Run linters, tests, and vulnerability checks
+    cmds:
+      - task: lint
+      - task: test
+      - task: vuln
+
+  build:
+    desc: Compile all packages
+    cmds:
+      - go build ./...
+
+  lint:
+    desc: Run all linters
+    cmds:
+      - task: lint:go
+      - task: lint:markdown
+      - task: lint:yaml
+      - task: lint:python
+      - task: lint:bash
+      - task: lint:gha
+
+  lint:go:
+    desc: Run golangci-lint
+    cmds:
+      - |
+        if [ -z "$(go list ./... 2>/dev/null)" ]; then
+          echo "lint:go: no Go packages yet, skipping"
+          exit 0
+        fi
+        go tool -modfile={{.TOOL_MODFILE}} golangci-lint run
+
+  lint:markdown:
+    desc: Lint Markdown files
+    cmds:
+      - markdownlint .
+
+  lint:yaml:
+    desc: Lint YAML files
+    cmds:
+      - yamlfmt -lint .
+
+  lint:python:
+    desc: Lint and format-check Python scripts
+    cmds:
+      - |
+        if [ -d scripts ]; then
+          ruff check scripts/ && ruff format --check scripts/
+        else
+          echo "lint:python: no scripts/ yet, skipping"
+        fi
+
+  lint:bash:
+    desc: Run shellcheck on shell scripts
+    cmds:
+      - |
+        files=$(find scripts -name '*.sh' 2>/dev/null)
+        if [ -n "$files" ]; then
+          # shellcheck disable=SC2086
+          shellcheck $files
+        else
+          echo "lint:bash: no shell scripts yet, skipping"
+        fi
+
+  lint:gha:
+    desc: Lint GitHub Actions workflows
+    cmds:
+      - |
+        if [ -d .github/workflows ]; then
+          actionlint
+        else
+          echo "lint:gha: no .github/workflows yet, skipping"
+        fi
+
+  fmt:
+    desc: Format code and config
+    cmds:
+      - task: fmt:go
+      - task: fmt:yaml
+
+  fmt:go:
+    desc: Format Go code via golangci-lint --fix
+    cmds:
+      - |
+        if [ -z "$(go list ./... 2>/dev/null)" ]; then
+          echo "fmt:go: no Go packages yet, skipping"
+          exit 0
+        fi
+        go tool -modfile={{.TOOL_MODFILE}} golangci-lint run --fix
+
+  fmt:yaml:
+    desc: Format YAML files
+    cmds:
+      - yamlfmt .
+
+  test:
+    desc: Run tests
+    cmds:
+      - task: test:go
+
+  test:go:
+    desc: Run unit tests via gotestsum
+    cmds:
+      - |
+        if [ -z "$(go list ./... 2>/dev/null)" ]; then
+          echo "test:go: no Go packages yet, skipping"
+          exit 0
+        fi
+        go tool -modfile={{.TOOL_MODFILE}} gotestsum --format testname -- -count=1 ./...
+
+  vuln:
+    desc: Check for known vulnerabilities
+    cmds:
+      - task: vuln:go
+
+  vuln:go:
+    desc: Run govulncheck
+    cmds:
+      - |
+        if [ -z "$(go list ./... 2>/dev/null)" ]; then
+          echo "vuln:go: no Go packages yet, skipping"
+          exit 0
+        fi
+        go tool -modfile={{.TOOL_MODFILE}} govulncheck ./...
+
+  mod:
+    desc: Download and tidy Go modules (root and tools)
+    cmds:
+      - task: mod:download
+      - task: mod:tidy
+
+  mod:download:
+    internal: true
+    cmds:
+      - go mod download
+      - go -C tools mod download
+
+  mod:tidy:
+    internal: true
+    cmds:
+      - go mod tidy
+      - go -C tools mod tidy
+
+  secrets:
+    desc: Scan committed history for secrets
+    cmds:
+      - gitleaks git . --no-banner
+
+  commit-lint:
+    desc: Lint the latest commit message
+    cmds:
+      - gitlint --commit HEAD
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -rf bin dist
