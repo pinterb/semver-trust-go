@@ -35,3 +35,6 @@ excalidraw.log
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json
