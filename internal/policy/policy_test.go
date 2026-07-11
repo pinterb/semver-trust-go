@@ -174,6 +174,13 @@ func TestParseRejects(t *testing.T) {
 			wantSub: "unknown keys", // the orphaned keys under a renamed table trip strict mode first
 		},
 		{
+			name: "empty adoption boundary",
+			mutate: func(s string) string {
+				return strings.Replace(s, "[policy]", "[policy]\nadoption_boundary = \"\"", 1)
+			},
+			wantSub: "adoption_boundary must be a non-empty revision",
+		},
+		{
 			name:    "unsupported policy version",
 			mutate:  func(s string) string { return strings.Replace(s, `version   = "0.1"`, `version   = "0.9"`, 1) },
 			wantSub: "unsupported policy version",
@@ -288,6 +295,51 @@ required_level = "T3"
 	}
 	if len(p.Scopes) != 0 || len(p.Weights) != 0 || len(p.Derivations) != 0 {
 		t.Errorf("expected empty scopes/weights/derivations, got %+v", p)
+	}
+}
+
+// TestAdoptionBoundary covers the ADR-024 field: a declared boundary loads
+// and round-trips; an absent one stays empty and Marshal emits no key (so
+// declared-but-empty remains distinguishable from absent — and rejected).
+func TestAdoptionBoundary(t *testing.T) {
+	withBoundary := strings.Replace(string(loadSpecExample(t)),
+		"[policy]", "[policy]\nadoption_boundary = \"v0-import\"", 1)
+
+	p, err := Parse([]byte(withBoundary))
+	if err != nil {
+		t.Fatalf("Parse(with adoption_boundary): %v", err)
+	}
+	if p.AdoptionBoundary != "v0-import" {
+		t.Errorf("AdoptionBoundary = %q, want %q", p.AdoptionBoundary, "v0-import")
+	}
+
+	out, err := p.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	p2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse(Marshal(p)): %v\nmarshalled:\n%s", err, out)
+	}
+	p.Digest, p2.Digest = "", ""
+	if !reflect.DeepEqual(p, p2) {
+		t.Errorf("round-trip mismatch:\nfirst  %+v\nsecond %+v\nmarshalled:\n%s", p, p2, out)
+	}
+
+	// Absent boundary: field empty, Marshal emits no adoption_boundary key.
+	plain, err := Parse(loadSpecExample(t))
+	if err != nil {
+		t.Fatalf("Parse(spec §9 example): %v", err)
+	}
+	if plain.AdoptionBoundary != "" {
+		t.Errorf("AdoptionBoundary = %q, want empty when undeclared", plain.AdoptionBoundary)
+	}
+	plainOut, err := plain.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal(no boundary): %v", err)
+	}
+	if strings.Contains(string(plainOut), "adoption_boundary") {
+		t.Errorf("Marshal emitted adoption_boundary for a policy that declares none:\n%s", plainOut)
 	}
 }
 

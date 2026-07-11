@@ -24,6 +24,20 @@
 // naming the §10 step it failed at, so the one-line reason the CLI prints to
 // stderr is traceable to the algorithm.
 //
+// # The adoption boundary (ADR-024)
+//
+// A policy MAY declare an adoption boundary ([policy] adoption_boundary): a
+// revision before which history is exempt from verification. A first release
+// (empty FROM) then anchors at boundary..TO instead of root..TO; ranges with
+// an explicit FROM are unaffected. The boundary is policy-pinned — there is
+// deliberately no CLI or Options field for it, because a verifier-supplied
+// boundary could be moved by whoever runs the verifier — and every
+// boundary-anchored report discloses the anchoring in both the human and
+// JSON renderings. Pre-boundary commits contribute nothing: no levels, no
+// scopes — exempt history makes no claim, which is not the same as T0
+// (ADR-008). ADR-008's unverifiable-⇒-abort posture holds unchanged inside
+// the verified region.
+//
 // # A sequencing note on the §5.4 meta-path check
 //
 // §10 step 1 says to verify the policy file's own history within FROM..TO

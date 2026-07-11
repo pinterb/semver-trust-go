@@ -7,12 +7,25 @@ package verify
 // per-step sections carry the §10 step they correspond to so a reader can
 // trace the algorithm through the output.
 type Report struct {
-	Repo       string `json:"repo"`
-	From       string `json:"from"`
-	To         string `json:"to"`
-	ToCommit   string `json:"to_commit"`
-	Component  string `json:"component,omitempty"`
-	VerifyTime string `json:"verify_time"`
+	Repo string `json:"repo"`
+	// From is the range anchor: the CLI FROM when one was given, or — for a
+	// first release under a policy-declared adoption boundary — the boundary
+	// revision as declared in the policy (ADR-024).
+	From     string `json:"from"`
+	To       string `json:"to"`
+	ToCommit string `json:"to_commit"`
+	// FromIsAdoptionBoundary discloses that From is the adoption boundary
+	// declared in the policy ([policy] adoption_boundary, ADR-024): history
+	// before it is exempt and makes no claim. "Verified since the boundary"
+	// and "verified since inception" are different claims and must never be
+	// conflated, so the marker rides every rendering of a boundary-anchored
+	// range.
+	FromIsAdoptionBoundary bool `json:"from_is_adoption_boundary,omitempty"`
+	// AdoptionBoundary is the resolved boundary commit SHA when
+	// FromIsAdoptionBoundary is set (the declared revision may be a tag).
+	AdoptionBoundary string `json:"adoption_boundary,omitempty"`
+	Component        string `json:"component,omitempty"`
+	VerifyTime       string `json:"verify_time"`
 
 	Policy      PolicyReport      `json:"policy"`       // §10 step 1
 	MetaPath    MetaPathReport    `json:"meta_path"`    // §10 step 1 / §5.4

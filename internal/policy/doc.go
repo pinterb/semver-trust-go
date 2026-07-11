@@ -12,6 +12,10 @@
 // adapter, policy version) reject anything outside their §9 vocabulary for
 // the same reason: unknown values mean unknown semantics.
 //
+// One key extends the §9 vocabulary by decision record rather than spec
+// text: [policy] adoption_boundary (ADR-024, spec §9 mirror queued for the
+// v0.3 pass). It is policy-pinned on purpose — see Policy.AdoptionBoundary.
+//
 // Parse also records the SHA-256 digest of the raw policy bytes, the value
 // the verification algorithm pins in the release attestation (§8.1
 // decision.policy.digest, §10 step 1).

@@ -21,7 +21,12 @@ type Options struct {
 	// RepoPath is the repository to verify (the CLI --repo, default ".").
 	RepoPath string
 	// From is the previous release tag; empty means a first release
-	// (root..TO, §5.2, §10 step 2).
+	// (root..TO, §5.2, §10 step 2) — unless the policy declares an adoption
+	// boundary, in which case a first release anchors at boundary..TO
+	// (ADR-024). An explicit From always wins: ranges anchored at a previous
+	// verified tag are unaffected by the boundary. There is deliberately no
+	// boundary option here — the boundary is policy-pinned (ADR-024 rejects
+	// CLI-supplied boundaries: whoever runs the verifier could move it).
 	From string
 	// To is the proposed release commit (revision), default "HEAD".
 	To string
@@ -135,9 +140,36 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 		return nil, abort(stepLoadPolicy, err)
 	}
 
-	// ---- §10 step 2: enumerate commits (root..TO for a first release). -----
-	commits, err := vcs.Range(repo, opts.From, opts.To)
+	// ---- §10 step 2: enumerate commits (root..TO for a first release, ------
+	// boundary..TO under a policy-declared adoption boundary, ADR-024). ------
+	// Pre-boundary commits are outside the range and contribute nothing: no
+	// levels, no scopes — exempt history makes no claim (never T0, ADR-008).
+	// An explicit FROM makes the boundary irrelevant: ranges anchored at a
+	// previous verified tag are unaffected.
+	from := opts.From
+	if from == "" && pol.AdoptionBoundary != "" {
+		boundarySHA, err := commitHash(repo, pol.AdoptionBoundary)
+		if err != nil {
+			return nil, abort(stepEnumerate, fmt.Errorf(
+				"adoption boundary %q declared in policy ([policy] adoption_boundary, ADR-024) does not resolve: %w",
+				pol.AdoptionBoundary, err))
+		}
+		from = pol.AdoptionBoundary
+		// Disclosure (ADR-024): "verified since the boundary" is a different
+		// claim from "verified since inception" and must never be conflated —
+		// the report marks the boundary in both renderings.
+		report.From = pol.AdoptionBoundary
+		report.FromIsAdoptionBoundary = true
+		report.AdoptionBoundary = boundarySHA
+	}
+	commits, err := vcs.Range(repo, from, opts.To)
 	if err != nil {
+		if report.FromIsAdoptionBoundary {
+			// vcs.Range enforces FROM-is-an-ancestor-of-TO (§10.2); name the
+			// boundary's policy provenance so the abort is traceable.
+			err = fmt.Errorf("adoption boundary %q declared in policy ([policy] adoption_boundary, ADR-024): %w",
+				pol.AdoptionBoundary, err)
+		}
 		return nil, abort(stepEnumerate, err)
 	}
 

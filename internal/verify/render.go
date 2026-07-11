@@ -64,8 +64,14 @@ func (r *Report) WriteText(w io.Writer) error {
 		e.println("  meta-paths: none declared")
 	}
 
-	// §10 steps 2–3 — per-commit provenance table.
+	// §10 steps 2–3 — per-commit provenance table. A boundary-anchored range
+	// is disclosed first (ADR-024): the reader must never mistake "verified
+	// since the boundary" for "verified since inception".
 	e.println("\n[§10 steps 2–3] commits")
+	if r.FromIsAdoptionBoundary {
+		e.printf("  range: %s..%s (FROM is the adoption boundary declared in policy — history before it is exempt and makes no claim; ADR-024)\n",
+			r.From, r.To)
+	}
 	r.writeCommitTable(e)
 	for _, c := range r.Commits {
 		if c.ReviewNote != "" {

@@ -36,6 +36,10 @@ type rawHeader struct {
 	Version   string `toml:"version"`
 	Threshold string `toml:"threshold"`
 	Strategy  string `toml:"strategy"`
+	// AdoptionBoundary is a pointer so a declared-but-empty boundary is
+	// distinguishable from an absent one: `adoption_boundary = ""` is a
+	// rejected declaration, not a no-op (ADR-024).
+	AdoptionBoundary *string `toml:"adoption_boundary,omitempty"`
 }
 
 type rawMeta struct {
@@ -160,6 +164,13 @@ func parseHeader(h *rawHeader, p *Policy) error {
 		return fmt.Errorf("policy: strategy: %w", err)
 	}
 	p.Strategy = strategy
+
+	if h.AdoptionBoundary != nil {
+		if *h.AdoptionBoundary == "" {
+			return fmt.Errorf("policy: adoption_boundary must be a non-empty revision when declared (ADR-024)")
+		}
+		p.AdoptionBoundary = *h.AdoptionBoundary
+	}
 	return nil
 }
 

@@ -38,7 +38,14 @@ into per-scope own floors and effective trust over the workspace graph.
 It fails closed: any commit that cannot be verified end-to-end, or a meta-path
 commit below the required level, aborts the run with a one-line reason naming
 the spec §10 step that failed (unverifiable is never T0, §5.2; the config
-protects the system, §5.4).`,
+protects the system, §5.4).
+
+A first release (no --from) anchors at the adoption boundary when the policy
+declares one ([policy] adoption_boundary, ADR-024): history before the
+boundary is exempt and makes no claim, and the report discloses the boundary
+in both renderings. The boundary is policy-pinned by design — there is no
+flag for it, because a CLI-supplied boundary could be moved by whoever runs
+the verifier.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// The verification clock is read once, here at the process
@@ -77,7 +84,7 @@ protects the system, §5.4).`,
 
 	f := cmd.Flags()
 	f.StringVar(&repoPath, "repo", ".", "repository to verify")
-	f.StringVar(&from, "from", "", "previous release tag; empty = first release (root..TO)")
+	f.StringVar(&from, "from", "", "previous release tag; empty = first release (root..TO, or boundary..TO under a policy-declared adoption_boundary, ADR-024)")
 	f.StringVar(&to, "to", "HEAD", "proposed release commit (revision)")
 	f.StringVar(&policyPath, "policy", ".semver-trust/policy.toml", "policy file path within TO's tree")
 	f.StringVar(&allowedSigners, "allowed-signers", "", "filesystem allowed-signers override; empty resolves the policy's identity.human.allowed_signers from TO's tree")
