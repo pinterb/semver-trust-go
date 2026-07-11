@@ -3,7 +3,7 @@
   "spec_version": "0.2",
   "source": {
     "repository": "https://github.com/semver-trust/spec",
-    "commit": "7d90988d44d63ab8ce4e7079ba8b8dd7bcb8b956"
+    "commit": "d7095bc556a74f9678bd354acaf3f307c20ee1b4"
   },
   "files": {
     "levels.json": "sha256:bcd117ae2b1a83838d829394716f1ff35dcdb66e0500405379f7bbf1945bf6b4",
@@ -13,7 +13,7 @@
     "decision.json": "sha256:01e2e2ac72f875961e8213ca19d1051c15e091174f93009653d39cf07ad00d6a",
     "LICENSE": "sha256:c95bae1d1ce0235ecccd3560b772ec1efb97f348a79f0fbe0a634f0c2ccefe2c",
     "crypto/allowed_signers": "sha256:12eb6da1715c0eac4e93f602a299d8581008894d619c80024a177e09220c1c02",
-    "crypto/build-fixture-repos.sh": "sha256:ab96c2e2815d0b8cfddb839a0c2a8768acd862b39e1901beb26cc25afc0a3221",
+    "crypto/build-fixture-repos.sh": "sha256:4cc404ef6c895663708d9a0f9c877fdeea6d1bf6ac0e72205e8ad06b9f611402",
     "crypto/signature-vectors.json": "sha256:149cf16da31592da14c7487c0756c40293a2ecebe06952be2e2aa3df544fdaa5",
     "crypto/keys/human-alice": "sha256:ec78114adad7a314a9f1031e907cb4f1dce57af4e73b77a4c3ff7b2bdb2ca71f",
     "crypto/keys/human-alice.pub": "sha256:732eac3772540d8d8ac5314e8a0d2a638054145580e286d9daa041b614f932cc",
@@ -24,6 +24,15 @@
     "crypto/keys/unknown-mallory": "sha256:bd563bf7be744fb6444fc025dbf0a19e3821cb258e1605626cc14a1afa65fb1f",
     "crypto/keys/unknown-mallory.pub": "sha256:98ecf51593e48f44cac529db68a80422144769c29a0a0d57f386f086303077fb",
     "crypto/keys/revoked-carol": "sha256:a1744aec5abcfbe15541c5bcc152000a09781049a7e1098b702576aa615a9788",
-    "crypto/keys/revoked-carol.pub": "sha256:cb38138d9b2fcb4be87a62b1f1a756baf0c9e686a220a2ab4a91527c6b49dc39"
+    "crypto/keys/revoked-carol.pub": "sha256:cb38138d9b2fcb4be87a62b1f1a756baf0c9e686a220a2ab4a91527c6b49dc39",
+    "crypto/attestations/allowed_signers": "sha256:14e4171ee630a6737ba9a8bd5b1c99f2d6cc842ec1a7b5a0b2434c6f151b60e6",
+    "crypto/attestations/attestation-vectors.json": "sha256:acd8b406bfbd628d988fb57f4ff0476e9fc680fe947ecee242c186abe24e3bac",
+    "crypto/attestations/envelopes/review-valid.dsse.json": "sha256:04bdee6cc779a8d9be8c972a4897bd6f15d61aaf0c6718ec6433e1d2bc5e673f",
+    "crypto/attestations/envelopes/release-valid.dsse.json": "sha256:5b4b4b8c72506bcc98b72d4290a7dc23bf25d0f4c4596f715432785fcaede6a3",
+    "crypto/attestations/envelopes/release-schema-invalid.dsse.json": "sha256:0846f091f0e341f06865f95afef433e8b65718683c87ac1e5ae2092f2a4da0e2",
+    "crypto/attestations/envelopes/release-sig-invalid.dsse.json": "sha256:0551433341a1405bf53d946833ea676b651e259bf93eb852ab90c0e06a852739",
+    "crypto/attestations/envelopes/release-unknown-signer.dsse.json": "sha256:4a5c7613d7c4ec4962f66ba3246d6a61cf02b1d095d866c3fe72988a39d05be6",
+    "schemas/release-v0.1.json": "sha256:d86587028e8efcff1621bd08a31323be3d4cdbdd8a41a03a00cbe4ee268944f6",
+    "schemas/review-v0.1.json": "sha256:c0f5a18f2d26d8f9f112aa2867eeb3a03f3ae0ef677c28cc6a6c00db9af026a0"
   }
 }

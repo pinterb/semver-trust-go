@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package vcs
+package sshsig
 
 import (
 	"crypto/sha256"
@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// sshsig implements OpenSSH's detached-signature format (PROTOCOL.sshsig),
+// Package sshsig implements OpenSSH's detached-signature format (PROTOCOL.sshsig),
 // the format git produces for gpg.format=ssh commit signing. Verification is
 // pure computation over the commit payload and the embedded public key;
 // which keys are trusted is the allowed-signers registry's business
@@ -21,13 +21,10 @@ import (
 const (
 	sshSigPEMType = "SSH SIGNATURE"
 	sshSigMagic   = "SSHSIG"
-	// gitSSHNamespace is the signature namespace git uses for commits and
-	// tags; a signature bound to any other purpose does not cover a commit.
-	gitSSHNamespace = "git"
 )
 
-// sshSig is a parsed SSH signature.
-type sshSig struct {
+// Signature is a parsed SSH signature.
+type Signature struct {
 	PublicKey ssh.PublicKey
 	Namespace string
 	hashAlg   string
@@ -44,8 +41,8 @@ type sshSigBlob struct {
 	Signature     []byte
 }
 
-// parseSSHSig decodes the PEM-armored SSHSIG blob.
-func parseSSHSig(armored string) (*sshSig, error) {
+// Parse decodes the PEM-armored SSHSIG blob.
+func Parse(armored string) (*Signature, error) {
 	block, _ := pem.Decode([]byte(armored))
 	if block == nil || block.Type != sshSigPEMType {
 		return nil, fmt.Errorf("sshsig: not an SSH SIGNATURE block")
@@ -70,7 +67,7 @@ func parseSSHSig(armored string) (*sshSig, error) {
 	if err := ssh.Unmarshal(blob.Signature, &sig); err != nil {
 		return nil, fmt.Errorf("sshsig: signature: %w", err)
 	}
-	return &sshSig{
+	return &Signature{
 		PublicKey: key,
 		Namespace: blob.Namespace,
 		hashAlg:   blob.HashAlgorithm,
@@ -78,10 +75,10 @@ func parseSSHSig(armored string) (*sshSig, error) {
 	}, nil
 }
 
-// verify checks the signature over message. The signed data is the SSHSIG
+// Verify checks the signature over message. The signed data is the SSHSIG
 // preamble binding the namespace, hash algorithm, and message digest —
 // signing covers H(message), never the raw message.
-func (s *sshSig) verify(message []byte) error {
+func (s *Signature) Verify(message []byte) error {
 	var digest []byte
 	switch s.hashAlg {
 	case "sha256":
@@ -104,14 +101,14 @@ func (s *sshSig) verify(message []byte) error {
 	return s.PublicKey.Verify(signed, s.signature)
 }
 
-// isSSHSignature reports whether an armored signature block is SSHSIG;
-// isPGPSignature the OpenPGP family. Anything else is an unknown family —
+// IsSSHSignature reports whether an armored signature block is SSHSIG;
+// IsPGPSignature the OpenPGP family. Anything else is an unknown family —
 // and every family this verifier cannot verify is unverifiable, never
 // skipped (the fail-closed key-family seam; fixture plan §2.1).
-func isSSHSignature(armored string) bool {
+func IsSSHSignature(armored string) bool {
 	return strings.Contains(armored, "-----BEGIN "+sshSigPEMType+"-----")
 }
 
-func isPGPSignature(armored string) bool {
+func IsPGPSignature(armored string) bool {
 	return strings.Contains(armored, "-----BEGIN PGP SIGNATURE-----")
 }

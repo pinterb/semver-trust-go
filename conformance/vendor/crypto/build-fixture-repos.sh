@@ -136,7 +136,52 @@ EOF
 git -C "$repo" update-ref refs/heads/main "$gpg_commit"
 git -C "$repo" tag 'role/gpg-commit' "$gpg_commit"
 
-# (e) tampered: alice's signed commit object, message altered after signing;
+# (e) release: the dedicated release-attestation fixture (fixture plan §6).
+# Everything the release-valid payload claims is reproducible from this tree:
+# .semver-trust/policy.toml is pinned in the setup commit (outside the
+# release range, so its authoring level cannot trip §5.4 inside it), v0.1.0
+# tags the setup commit, the range v0.1.0..HEAD holds one human and one
+# agent fix: commit (declared intent PATCH → semantic floor patch, §6.1),
+# own trust floors to T0, and the demoted release tag v0.1.1-t0.1 points at
+# HEAD (§7.1, §8.1: the subject binds the tag name to its commit).
+repo="${dest}/release"
+new_repo "$repo"
+mkdir -p "${repo}/.semver-trust"
+cat >"${repo}/.semver-trust/policy.toml" <<'EOF'
+# semver-trust-conformance TEST POLICY - fixture-local (crypto fixture plan §6)
+[policy]
+version   = "0.1"
+threshold = "T2"
+strategy  = "demote"
+
+[meta]
+paths          = [".semver-trust/**"]
+required_level = "T3"
+EOF
+git -C "$repo" add .semver-trust/policy.toml
+printf 'v1\n' >"${repo}/app.txt"
+git -C "$repo" add app.txt
+git \
+	-c user.name='alice' \
+	-c user.email='alice@semver-trust.test' \
+	-c gpg.format=ssh \
+	-c user.signingkey="${keys}/human-alice" \
+	-c commit.gpgsign=true \
+	-C "$repo" commit --quiet -m 'feat: initial release
+
+Provenance: human'
+git -C "$repo" tag 'v0.1.0'
+git -C "$repo" tag 'role/release-setup-commit'
+commit_signed "$repo" 'alice@semver-trust.test' 'human-alice' 'app.txt' 'v1 fixed' 'fix: correct output
+
+Provenance: human' 'release-alice-commit'
+commit_signed "$repo" 'ci-bot@semver-trust.test' 'agent-ci-bot' 'app.txt' 'v1 fixed again' 'fix: correct output again
+
+Provenance: agent
+Provenance-Agent: fixture-agent/1.0' 'release-ci-bot-commit'
+git -C "$repo" tag 'v0.1.1-t0.1'
+
+# (f) tampered: alice's signed commit object, message altered after signing;
 # the original sshsig no longer covers the bytes.
 repo="${dest}/tampered"
 new_repo "$repo"

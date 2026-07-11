@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package vcs
+package sshsig
 
 import (
+	"errors"
 	"bufio"
 	"bytes"
 	"fmt"
@@ -183,4 +184,37 @@ func parseSignerTime(v string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("invalid time %q (want YYYYMMDD[HHMM[SS]][Z])", v)
+}
+
+// Registry-resolution failure classes. Both are aborts for the caller:
+// unverifiable is never T0 (spec §5.2).
+var (
+	// ErrUnknownSigner — the key is absent from the injected registry.
+	ErrUnknownSigner = errors.New("signing key is not an allowed signer")
+	// ErrRevokedSigner — the key is enrolled but not valid for this
+	// namespace at the verification instant: distinct from never-enrolled.
+	ErrRevokedSigner = errors.New("signing key enrollment is not valid at the verification time")
+)
+
+// Resolve finds the enrollment for a key in a namespace at the verification
+// instant and returns its principal. No enrollment at all is
+// ErrUnknownSigner; enrollments that exist but are invalid (window,
+// namespace, CA-only) are ErrRevokedSigner.
+func Resolve(key ssh.PublicKey, signers []AllowedSigner, namespace string, at time.Time) (string, error) {
+	marshaled := string(key.Marshal())
+	enrolled := false
+	for _, s := range signers {
+		if string(s.Key.Marshal()) != marshaled {
+			continue
+		}
+		enrolled = true
+		if s.CertAuthority || !s.forNamespace(namespace) || !s.validAt(at) {
+			continue
+		}
+		return s.Principals[0], nil
+	}
+	if enrolled {
+		return "", ErrRevokedSigner
+	}
+	return "", ErrUnknownSigner
 }

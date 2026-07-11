@@ -48,6 +48,18 @@ FILES = (
     "crypto/keys/unknown-mallory.pub",
     "crypto/keys/revoked-carol",
     "crypto/keys/revoked-carol.pub",
+    # DSSE attestation fixtures (fixture plan §6): the attestation-signer
+    # registry, vectors, and the vendored frozen envelopes.
+    "crypto/attestations/allowed_signers",
+    "crypto/attestations/attestation-vectors.json",
+    "crypto/attestations/envelopes/review-valid.dsse.json",
+    "crypto/attestations/envelopes/release-valid.dsse.json",
+    "crypto/attestations/envelopes/release-schema-invalid.dsse.json",
+    "crypto/attestations/envelopes/release-sig-invalid.dsse.json",
+    "crypto/attestations/envelopes/release-unknown-signer.dsse.json",
+    # Predicate JSON Schemas (GO-010; live under schemas/, not conformance/).
+    "schemas/release-v0.1.json",
+    "schemas/review-v0.1.json",
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -56,7 +68,10 @@ MANIFEST = ROOT / "conformance" / "manifest.json"
 
 
 def fetch(commit: str, name: str) -> bytes:
-    url = f"{RAW_BASE}/{commit}/conformance/{name}"
+    # schemas/ entries are repo-root-relative; everything else lives under
+    # conformance/.
+    prefix = "" if name.startswith("schemas/") else "conformance/"
+    url = f"{RAW_BASE}/{commit}/{prefix}{name}"
     with urllib.request.urlopen(url) as resp:
         return resp.read()
 

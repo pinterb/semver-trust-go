@@ -12,7 +12,23 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage/memory"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/semver-trust/semver-trust-go/internal/sshsig"
 )
+
+// gitSSHNamespace is the signature namespace git uses for commits and tags;
+// a signature bound to any other purpose does not cover a commit.
+const gitSSHNamespace = "git"
+
+// AllowedSigner re-exports the registry entry type consumed by
+// VerifyCommitSignature; parsing and resolution live in internal/sshsig,
+// shared with attestation verification.
+type AllowedSigner = sshsig.AllowedSigner
+
+// ParseAllowedSigners re-exports the registry parser.
+func ParseAllowedSigners(data []byte) ([]AllowedSigner, error) {
+	return sshsig.ParseAllowedSigners(data)
+}
 
 // Signature-verification failure classes (§5.2, §10 step 3). Every one is an
 // abort: a commit that cannot be verified end-to-end has no level —
@@ -27,12 +43,12 @@ var (
 	// plan §2.1 fail-closed rider).
 	ErrUnsupportedKeyFamily = errors.New("unsupported signature key family")
 	// ErrUnknownSigner — the signing key is absent from the injected
-	// allowed-signers registry.
-	ErrUnknownSigner = errors.New("signing key is not an allowed signer")
+	// allowed-signers registry (alias of the shared sshsig sentinel).
+	ErrUnknownSigner = sshsig.ErrUnknownSigner
 	// ErrRevokedSigner — the signing key is enrolled but not valid at the
-	// verification instant (outside its valid-after/valid-before window):
-	// distinct from never-enrolled.
-	ErrRevokedSigner = errors.New("signing key enrollment is not valid at the verification time")
+	// verification instant: distinct from never-enrolled (alias of the
+	// shared sshsig sentinel).
+	ErrRevokedSigner = sshsig.ErrRevokedSigner
 	// ErrInvalidSignature — the signature does not verify over the commit
 	// bytes (tampering, corruption, or a signature for other content).
 	ErrInvalidSignature = errors.New("signature does not verify")
@@ -70,13 +86,13 @@ func VerifyCommitSignature(path, rev string, signers []AllowedSigner, at time.Ti
 	switch {
 	case commit.PGPSignature == "":
 		return VerifiedSignature{}, fmt.Errorf("verify %s: %w", commit.Hash, ErrUnsigned)
-	case isPGPSignature(commit.PGPSignature):
+	case sshsig.IsPGPSignature(commit.PGPSignature):
 		return VerifiedSignature{}, fmt.Errorf("verify %s: OpenPGP: %w", commit.Hash, ErrUnsupportedKeyFamily)
-	case !isSSHSignature(commit.PGPSignature):
+	case !sshsig.IsSSHSignature(commit.PGPSignature):
 		return VerifiedSignature{}, fmt.Errorf("verify %s: %w", commit.Hash, ErrUnsupportedKeyFamily)
 	}
 
-	sig, err := parseSSHSig(commit.PGPSignature)
+	sig, err := sshsig.Parse(commit.PGPSignature)
 	if err != nil {
 		return VerifiedSignature{}, fmt.Errorf("verify %s: %w: %v", commit.Hash, ErrInvalidSignature, err)
 	}
@@ -90,7 +106,7 @@ func VerifyCommitSignature(path, rev string, signers []AllowedSigner, at time.Ti
 	// Resolve the embedded key against the injected registry before any
 	// cryptography: an unenrolled key's mathematically valid signature is
 	// still an abort, and enrolled-but-invalid is reported distinctly.
-	principal, err := resolveSigner(sig.PublicKey, signers, at)
+	principal, err := sshsig.Resolve(sig.PublicKey, signers, gitSSHNamespace, at)
 	if err != nil {
 		return VerifiedSignature{}, fmt.Errorf("verify %s: %w", commit.Hash, err)
 	}
@@ -99,7 +115,7 @@ func VerifyCommitSignature(path, rev string, signers []AllowedSigner, at time.Ti
 	if err != nil {
 		return VerifiedSignature{}, err
 	}
-	if err := sig.verify(payload); err != nil {
+	if err := sig.Verify(payload); err != nil {
 		return VerifiedSignature{}, fmt.Errorf("verify %s: %w: %v", commit.Hash, ErrInvalidSignature, err)
 	}
 
@@ -107,29 +123,6 @@ func VerifyCommitSignature(path, rev string, signers []AllowedSigner, at time.Ti
 		Principal:   principal,
 		Fingerprint: ssh.FingerprintSHA256(sig.PublicKey),
 	}, nil
-}
-
-// resolveSigner finds the enrollment for a key and returns its principal.
-// No enrollment at all is ErrUnknownSigner; enrollments that exist but are
-// invalid at the verification instant (window, namespace, CA-only) are
-// ErrRevokedSigner.
-func resolveSigner(key ssh.PublicKey, signers []AllowedSigner, at time.Time) (string, error) {
-	marshaled := string(key.Marshal())
-	enrolled := false
-	for _, s := range signers {
-		if string(s.Key.Marshal()) != marshaled {
-			continue
-		}
-		enrolled = true
-		if s.CertAuthority || !s.forNamespace(gitSSHNamespace) || !s.validAt(at) {
-			continue
-		}
-		return s.Principals[0], nil
-	}
-	if enrolled {
-		return "", ErrRevokedSigner
-	}
-	return "", ErrUnknownSigner
 }
 
 // commitPayload returns the bytes the signature covers: the commit object
