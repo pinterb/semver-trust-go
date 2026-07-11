@@ -21,6 +21,7 @@ func newVerifyCmd() *cobra.Command {
 		policyPath         string
 		allowedSigners     string
 		attestationSigners string
+		gpgKeyring         string
 		component          string
 		verifyTime         string
 		jsonOut            bool
@@ -59,6 +60,7 @@ protects the system, §5.4).`,
 				PolicyPath:             policyPath,
 				AllowedSignersPath:     allowedSigners,
 				AttestationSignersPath: attestationSigners,
+				GPGKeyringPath:         gpgKeyring,
 				Component:              component,
 				VerifyTime:             at,
 			})
@@ -80,6 +82,7 @@ protects the system, §5.4).`,
 	f.StringVar(&policyPath, "policy", ".semver-trust/policy.toml", "policy file path within TO's tree")
 	f.StringVar(&allowedSigners, "allowed-signers", "", "filesystem allowed-signers override; empty resolves the policy's identity.human.allowed_signers from TO's tree")
 	f.StringVar(&attestationSigners, "attestation-signers", "", "filesystem attestation-signer registry; empty means reviews cannot be verified and classify none")
+	f.StringVar(&gpgKeyring, "gpg-keyring", "", "armored OpenPGP public keyring for GPG-signed commits; empty means the GPG key family is unverifiable and fails closed")
 	f.StringVar(&component, "component", "", "workspace component to headline; empty = single/root component")
 	f.StringVar(&verifyTime, "verify-time", "", "verification instant (RFC3339); empty = now at the CLI boundary")
 	f.BoolVar(&jsonOut, "json", false, "emit a structured JSON report instead of the human table")

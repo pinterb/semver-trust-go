@@ -36,6 +36,13 @@ type Options struct {
 	// classify none (honest degradation, §4.3) — but a stored attestation that
 	// fails verification still aborts.
 	AttestationSignersPath string
+	// GPGKeyringPath is a filesystem path to an armored OpenPGP public
+	// keyring (the CLI --gpg-keyring). Empty means the GPG key family is not
+	// verifiable and PGP-signed commits abort as unsupported (fail closed,
+	// fixture plan §2.1). Flag-only for now: the §9 policy vocabulary has no
+	// identity.human field for a GPG keyring — adding one is a spec-repo
+	// question, so no in-tree resolution happens here.
+	GPGKeyringPath string
 	// Component selects which workspace component to headline in propagation
 	// output; empty is the single/root component.
 	Component string
@@ -114,10 +121,15 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 		Adapter:   pol.GraphAdapter,
 	}
 
-	signers, err := resolveHumanSigners(opts, pol, repo)
+	keyring, err := resolvePGPKeyring(opts.GPGKeyringPath)
 	if err != nil {
 		return nil, abort(stepLoadPolicy, err)
 	}
+	signers, err := resolveHumanSigners(opts, pol, repo, keyring != nil)
+	if err != nil {
+		return nil, abort(stepLoadPolicy, err)
+	}
+	trusted := vcs.TrustedSigners{AllowedSigners: signers, PGPKeyring: keyring}
 	attVerifier, err := buildAttestationVerifier(opts.AttestationSignersPath)
 	if err != nil {
 		return nil, abort(stepLoadPolicy, err)
@@ -134,7 +146,7 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 	tcommits := make([]trust.Commit, 0, len(commits))
 	report.Commits = make([]CommitReport, 0, len(commits))
 	for _, c := range commits {
-		vs, err := vcs.VerifyCommitSignature(repo, c.Hash, signers, at)
+		vs, err := vcs.VerifyCommitSignature(repo, c.Hash, trusted, at)
 		if err != nil {
 			return nil, abort(stepSignature, err)
 		}
@@ -226,8 +238,13 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 
 // resolveHumanSigners loads the human allowed-signers registry: the filesystem
 // override when given, else the policy's identity.human.allowed_signers path
-// read from TO's tree (§9, §10 step 1).
-func resolveHumanSigners(opts Options, pol *policy.Policy, repo string) ([]vcs.AllowedSigner, error) {
+// read from TO's tree (§9, §10 step 1). With no registry from either source
+// the run has no trust material and aborts — unless another key family's
+// material was injected (haveOtherFamily), in which case the SSH registry is
+// simply empty: a pure-GPG run needs no SSH registry, and any SSH-signed
+// commit then still aborts as an unknown signer (fail closed, no grant
+// added).
+func resolveHumanSigners(opts Options, pol *policy.Policy, repo string, haveOtherFamily bool) ([]vcs.AllowedSigner, error) {
 	var data []byte
 	switch {
 	case opts.AllowedSignersPath != "":
@@ -242,11 +259,30 @@ func resolveHumanSigners(opts Options, pol *policy.Policy, repo string) ([]vcs.A
 		if err != nil {
 			return nil, fmt.Errorf("allowed-signers from tree (%s): %w", pol.Identity.Human.AllowedSigners, err)
 		}
+	case haveOtherFamily:
+		return nil, nil
 	default:
 		return nil, errors.New(
-			"no allowed-signers registry: policy declares no identity.human.allowed_signers and no --allowed-signers override was given")
+			"no trust material: policy declares no identity.human.allowed_signers and neither --allowed-signers nor --gpg-keyring was given")
 	}
 	return vcs.ParseAllowedSigners(data)
+}
+
+// resolvePGPKeyring loads the injected OpenPGP public keyring, or nil when no
+// path was given — the GPG family then stays fail-closed unsupported.
+func resolvePGPKeyring(path string) (*vcs.PGPKeyring, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := readFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("gpg-keyring: %w", err)
+	}
+	keyring, err := vcs.ParsePGPKeyring(data)
+	if err != nil {
+		return nil, fmt.Errorf("gpg-keyring: %w", err)
+	}
+	return keyring, nil
 }
 
 // buildAttestationVerifier constructs the review-attestation verifier from the

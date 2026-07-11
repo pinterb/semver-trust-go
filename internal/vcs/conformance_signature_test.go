@@ -138,7 +138,9 @@ func TestConformanceSSHSignatures(t *testing.T) {
 				rev = stripSignature(t, repo, rev)
 			}
 
-			got, err := VerifyCommitSignature(repo, rev, signers, at)
+			// No PGP keyring is injected: the gpg-family vector asserts the
+			// SSH-only conformance contract's fail-closed rider holds.
+			got, err := VerifyCommitSignature(repo, rev, TrustedSigners{AllowedSigners: signers}, at)
 
 			if vec.Expected.Outcome == "verified" {
 				if err != nil {

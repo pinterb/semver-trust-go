@@ -13,6 +13,7 @@ import (
 	"github.com/go-git/go-git/v5/storage/memory"
 	"golang.org/x/crypto/ssh"
 
+	"github.com/semver-trust/semver-trust-go/internal/pgp"
 	"github.com/semver-trust/semver-trust-go/internal/sshsig"
 )
 
@@ -28,6 +29,30 @@ type AllowedSigner = sshsig.AllowedSigner
 // ParseAllowedSigners re-exports the registry parser.
 func ParseAllowedSigners(data []byte) ([]AllowedSigner, error) {
 	return sshsig.ParseAllowedSigners(data)
+}
+
+// PGPKeyring re-exports the OpenPGP public-keyring type consumed by
+// VerifyCommitSignature; parsing and verification live in internal/pgp.
+type PGPKeyring = pgp.Keyring
+
+// ParsePGPKeyring re-exports the OpenPGP keyring parser.
+func ParsePGPKeyring(data []byte) (*PGPKeyring, error) {
+	return pgp.ParseKeyring(data)
+}
+
+// TrustedSigners bundles the injected trust material for commit-signature
+// verification, one field per key family (§4.2, ADR-018: all trust material
+// is injected, never ambient). Each family verifies only against its own
+// material; a family with no material injected fails closed as unsupported.
+type TrustedSigners struct {
+	// AllowedSigners is the SSH allowed-signers registry (§9
+	// identity.human.allowed_signers).
+	AllowedSigners []AllowedSigner
+	// PGPKeyring is the OpenPGP public keyring; nil means the GPG family is
+	// not verifiable in this run and a PGP-signed commit aborts with
+	// ErrUnsupportedKeyFamily — the fixture plan §2.1 fail-closed rider,
+	// unchanged from the SSH-only verifier.
+	PGPKeyring *PGPKeyring
 }
 
 // Signature-verification failure classes (§5.2, §10 step 3). Every one is an
@@ -63,13 +88,16 @@ type VerifiedSignature struct {
 	Fingerprint string
 }
 
-// VerifyCommitSignature verifies the SSH signature of the commit at rev in
-// the repository at path against the injected allowed-signers registry, at
-// the injected verification instant (ADR-018: no ambient trust material, no
-// wall clock). It fails closed on every path: unsigned, unsupported key
-// family, unknown or revoked signer, wrong namespace, or a signature that
-// does not cover the commit bytes.
-func VerifyCommitSignature(path, rev string, signers []AllowedSigner, at time.Time) (VerifiedSignature, error) {
+// VerifyCommitSignature verifies the signature of the commit at rev in the
+// repository at path against the injected trust material, at the injected
+// verification instant (ADR-018: no ambient trust material, no wall clock).
+// The signature's key family selects the verifier: SSH armor against the
+// allowed-signers registry, PGP armor against the OpenPGP keyring when one
+// is injected. It fails closed on every path: unsigned, unsupported key
+// family (including PGP with no keyring injected), unknown or revoked
+// signer, wrong namespace, or a signature that does not cover the commit
+// bytes.
+func VerifyCommitSignature(path, rev string, trusted TrustedSigners, at time.Time) (VerifiedSignature, error) {
 	apath, err := rootPath(path)
 	if err != nil {
 		return VerifiedSignature{}, err
@@ -87,7 +115,7 @@ func VerifyCommitSignature(path, rev string, signers []AllowedSigner, at time.Ti
 	case commit.PGPSignature == "":
 		return VerifiedSignature{}, fmt.Errorf("verify %s: %w", commit.Hash, ErrUnsigned)
 	case sshsig.IsPGPSignature(commit.PGPSignature):
-		return VerifiedSignature{}, fmt.Errorf("verify %s: OpenPGP: %w", commit.Hash, ErrUnsupportedKeyFamily)
+		return verifyPGPCommit(commit, trusted.PGPKeyring, at)
 	case !sshsig.IsSSHSignature(commit.PGPSignature):
 		return VerifiedSignature{}, fmt.Errorf("verify %s: %w", commit.Hash, ErrUnsupportedKeyFamily)
 	}
@@ -106,7 +134,7 @@ func VerifyCommitSignature(path, rev string, signers []AllowedSigner, at time.Ti
 	// Resolve the embedded key against the injected registry before any
 	// cryptography: an unenrolled key's mathematically valid signature is
 	// still an abort, and enrolled-but-invalid is reported distinctly.
-	principal, err := sshsig.Resolve(sig.PublicKey, signers, gitSSHNamespace, at)
+	principal, err := sshsig.Resolve(sig.PublicKey, trusted.AllowedSigners, gitSSHNamespace, at)
 	if err != nil {
 		return VerifiedSignature{}, fmt.Errorf("verify %s: %w", commit.Hash, err)
 	}
@@ -122,6 +150,38 @@ func VerifyCommitSignature(path, rev string, signers []AllowedSigner, at time.Ti
 	return VerifiedSignature{
 		Principal:   principal,
 		Fingerprint: ssh.FingerprintSHA256(sig.PublicKey),
+	}, nil
+}
+
+// verifyPGPCommit is the OpenPGP arm of the key-family dispatch. With no
+// keyring injected the family is unverifiable and fails closed — the
+// conformance contract's fail-closed rider (fixture plan §2.1), unchanged.
+// With one, internal/pgp verifies the detached signature over the commit
+// bytes and its unknown/invalid-at-instant/bad-signature failures map onto
+// the existing sentinels, so errors.Is identities stay uniform across key
+// families.
+func verifyPGPCommit(commit *object.Commit, keyring *PGPKeyring, at time.Time) (VerifiedSignature, error) {
+	if keyring == nil {
+		return VerifiedSignature{}, fmt.Errorf(
+			"verify %s: OpenPGP: no OpenPGP keyring injected: %w", commit.Hash, ErrUnsupportedKeyFamily)
+	}
+	payload, err := commitPayload(commit)
+	if err != nil {
+		return VerifiedSignature{}, err
+	}
+	verified, err := pgp.Verify(payload, commit.PGPSignature, keyring, at)
+	switch {
+	case err == nil:
+	case errors.Is(err, pgp.ErrUnknownKey):
+		return VerifiedSignature{}, fmt.Errorf("verify %s: OpenPGP: %w", commit.Hash, ErrUnknownSigner)
+	case errors.Is(err, pgp.ErrKeyInvalidAtInstant):
+		return VerifiedSignature{}, fmt.Errorf("verify %s: OpenPGP: %w: %v", commit.Hash, ErrRevokedSigner, err)
+	default:
+		return VerifiedSignature{}, fmt.Errorf("verify %s: OpenPGP: %w: %v", commit.Hash, ErrInvalidSignature, err)
+	}
+	return VerifiedSignature{
+		Principal:   verified.Principal,
+		Fingerprint: verified.Fingerprint,
 	}, nil
 }
 

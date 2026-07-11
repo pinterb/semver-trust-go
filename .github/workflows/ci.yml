@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          guard_dirs="internal/vcs internal/trust internal/attest internal/derive internal/sshsig"
+          guard_dirs="internal/vcs internal/trust internal/attest internal/derive internal/sshsig internal/pgp"
           violations=""
           for d in $guard_dirs; do
             [ -d "$d" ] || continue
