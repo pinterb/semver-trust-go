@@ -249,6 +249,26 @@ func entryHash(c *object.Commit, path string) (plumbing.Hash, error) {
 	return entry.Hash, nil
 }
 
+// ResolveCommit resolves a revision (tag name, branch name, abbreviated or
+// full hash) to its full commit SHA against the repository at path. Callers
+// that key storage or subjects off commit identity resolve through here so a
+// short hash or tag never becomes a storage key.
+func ResolveCommit(path, rev string) (string, error) {
+	apath, err := rootPath(path)
+	if err != nil {
+		return "", err
+	}
+	r, err := git.PlainOpenWithOptions(apath, &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		return "", err
+	}
+	c, err := resolveCommit(r, rev)
+	if err != nil {
+		return "", fmt.Errorf("resolving %q: %w", rev, err)
+	}
+	return c.Hash.String(), nil
+}
+
 func resolveCommit(r *git.Repository, rev string) (*object.Commit, error) {
 	hash, err := r.ResolveRevision(plumbing.Revision(rev))
 	if err != nil {
