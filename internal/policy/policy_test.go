@@ -30,7 +30,7 @@ func TestParseSpecExample(t *testing.T) {
 	want := &Policy{
 		Version:   "0.1",
 		Threshold: trust.T2,
-		Strategy:  StrategyDemote,
+		Strategy:  trust.StrategyDemote,
 		Scopes: map[string]string{
 			"services/auth/**":    "auth",
 			"services/billing/**": "billing",

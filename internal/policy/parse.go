@@ -155,7 +155,7 @@ func parseHeader(h *rawHeader, p *Policy) error {
 	}
 	p.Threshold = threshold
 
-	strategy, err := ParseStrategy(h.Strategy)
+	strategy, err := trust.ParseStrategy(h.Strategy)
 	if err != nil {
 		return fmt.Errorf("policy: strategy: %w", err)
 	}
