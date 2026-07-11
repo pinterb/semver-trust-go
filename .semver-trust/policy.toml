@@ -1,0 +1,34 @@
+# SemVer-Trust policy for semver-trust-go (D3, maintainer decision 2026-07-11).
+# threshold T2 / strategy demote: under-evidenced releases land in the
+# pre-release channel honestly and promote on post-hoc review (spec §6.3,
+# §7.3). Single-module repository: one implicit "default" scope; weights
+# omitted until blast-radius evidence consumes them.
+[policy]
+version   = "0.1"
+threshold = "T2"
+strategy  = "demote"
+
+# The configuration is the root of trust (spec §5.4): the files that can
+# reclassify anything require T2 — the ceiling reachable by this repo's
+# agent-authored, maintainer-reviewed commits (T3 needs a distinct second
+# human, which a solo-maintainer project cannot honestly produce).
+[meta]
+paths = [
+  ".semver-trust/**",
+  ".github/workflows/**",
+  ".github/rulesets/**",
+  "scripts/merge-pr.sh",
+]
+required_level = "T2"
+
+[identity.human]
+allowed_signers = ".semver-trust/allowed_signers"
+
+[trailers]
+require = true
+
+[graph]
+adapter = "none"
+
+[evidence.go]
+compat = "apidiff"

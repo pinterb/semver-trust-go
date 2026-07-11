@@ -1,0 +1,4 @@
+# Human identity registry (spec §4.2, §9). SSH enrollment lands with the
+# maintainer's SSH signing key; the existing history is GPG-signed and
+# verifies through the injected OpenPGP keyring (GPG key-family support,
+# maintainer decision 2026-07-11).
