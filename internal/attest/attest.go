@@ -119,23 +119,31 @@ type Verifier struct {
 func NewVerifier(signers []sshsigpkg.AllowedSigner, schemas map[string][]byte) (*Verifier, error) {
 	compiled := make(map[string]*jsonschema.Schema, len(schemas))
 	for predicateType, raw := range schemas {
-		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
-		if err != nil {
-			return nil, fmt.Errorf("attest: schema for %s: %w", predicateType, err)
-		}
-		compiler := jsonschema.NewCompiler()
-		compiler.AssertFormat()
-		url := "schema.json"
-		if err := compiler.AddResource(url, doc); err != nil {
-			return nil, fmt.Errorf("attest: schema for %s: %w", predicateType, err)
-		}
-		schema, err := compiler.Compile(url)
+		schema, err := compileSchema(raw)
 		if err != nil {
 			return nil, fmt.Errorf("attest: schema for %s: %w", predicateType, err)
 		}
 		compiled[predicateType] = schema
 	}
 	return &Verifier{signers: signers, schemas: compiled}, nil
+}
+
+// compileSchema compiles one raw JSON Schema with format assertion enabled
+// (RFC 3339 timestamps are enforced) and strictly offline resolution. Both
+// the verifier and the emitter compile through here, so emission validates
+// against exactly the schema verification will apply.
+func compileSchema(raw []byte) (*jsonschema.Schema, error) {
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	compiler := jsonschema.NewCompiler()
+	compiler.AssertFormat()
+	const url = "schema.json"
+	if err := compiler.AddResource(url, doc); err != nil {
+		return nil, err
+	}
+	return compiler.Compile(url)
 }
 
 // PAE computes the DSSE v1 pre-authentication encoding.

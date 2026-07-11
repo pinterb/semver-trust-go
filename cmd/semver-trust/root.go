@@ -24,9 +24,10 @@ provenance of source changes, aggregates it into a trust level, and verifies a
 release against a repository policy (spec §10).
 
 Available now: verify (GO-040) — walk a release range and report per-commit
-provenance and effective trust; policy validate/explain and the
-zero-configuration plain-mode tag commands list, latest, next, and tag
-(GO-041). Arriving with Phase 4: release (GO-042).`,
+provenance and effective trust; attest review — emit a signed §4.3 review
+attestation over commits; policy validate/explain and the zero-configuration
+plain-mode tag commands list, latest, next, and tag (GO-041). Arriving with
+Phase 4: release (GO-042).`,
 		SilenceUsage: true,
 		Version:      versionString(),
 	}
@@ -36,6 +37,7 @@ zero-configuration plain-mode tag commands list, latest, next, and tag
 
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newVerifyCmd())
+	root.AddCommand(newAttestCmd())
 	root.AddCommand(newPolicyCmd())
 	root.AddCommand(newListCmd())
 	root.AddCommand(newLatestCmd())
