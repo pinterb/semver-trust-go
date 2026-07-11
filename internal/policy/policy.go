@@ -78,6 +78,26 @@ type Policy struct {
 	// Strategy is the §6.3 enforcement strategy.
 	Strategy trust.Strategy
 
+	// AdoptionBoundary is the optional ADR-024 adoption boundary: a revision
+	// (tag name or commit SHA) before which history is exempt from
+	// verification. The verifier resolves it against the repository at
+	// verification time; a first release then verifies boundary..TO instead
+	// of root..TO, and pre-boundary commits contribute no trust level at all
+	// (out of scope, never T0 — ADR-008).
+	//
+	// Policy-pinning is THE security property (ADR-024): the boundary lives
+	// only here, never in a CLI argument or environment, because a
+	// verifier-supplied boundary would let whoever runs the verifier move it.
+	// In the policy file it is protected by the §5.4 meta-path rule — moving
+	// it is itself a policy-file commit that must meet the required meta
+	// level — and the §8.1 attestation's pinned policy digest freezes which
+	// boundary produced each decision.
+	//
+	// Vocabulary note: this field is recorded in ADR-024; the spec §9 mirror
+	// is queued for the v0.3 pass (the ADR-015 pattern: decision now, spec
+	// text at the next version). Empty means no boundary is declared.
+	AdoptionBoundary string
+
 	// Scopes maps path globs to scope names (§5.1). Paths matching no glob
 	// fall into the implicit "default" scope.
 	Scopes map[string]string

@@ -25,12 +25,17 @@ func (p *Policy) Marshal() ([]byte, error) {
 		scopes["weights"] = weights
 	}
 
+	header := &rawHeader{
+		Version:   p.Version,
+		Threshold: p.Threshold.String(),
+		Strategy:  p.Strategy.String(),
+	}
+	if p.AdoptionBoundary != "" {
+		header.AdoptionBoundary = &p.AdoptionBoundary
+	}
+
 	raw := rawPolicy{
-		Policy: &rawHeader{
-			Version:   p.Version,
-			Threshold: p.Threshold.String(),
-			Strategy:  p.Strategy.String(),
-		},
+		Policy: header,
 		Scopes: scopes,
 		Meta: &rawMeta{
 			Paths:         p.Meta.Paths,
