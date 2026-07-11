@@ -2,6 +2,8 @@
 
 package trust
 
+import "fmt"
+
 // Level is the scalar trust level T0-T3 (§3.1): a count of independent
 // accountable humans bound to a change, with one intermediate rung (T1) for
 // agent corroboration. Levels order accountability, not risk (§1.1
@@ -20,6 +22,23 @@ const (
 	// verified reviewer identity.
 	T3
 )
+
+// ParseLevel parses the canonical level form "T0".."T3", the shape levels
+// take in policy files (§9), conformance vectors, and attestations.
+func ParseLevel(s string) (Level, error) {
+	switch s {
+	case "T0":
+		return T0, nil
+	case "T1":
+		return T1, nil
+	case "T2":
+		return T2, nil
+	case "T3":
+		return T3, nil
+	default:
+		return 0, fmt.Errorf("invalid trust level %q (want \"T0\"..\"T3\")", s)
+	}
+}
 
 // String returns the vector-facing name of the level ("T0".."T3").
 func (l Level) String() string {

@@ -1,0 +1,59 @@
+# Reproduced verbatim from the SemVer-Trust specification §9 reference
+# example (https://github.com/semver-trust/spec, spec/semver-trust.md,
+# Draft v0.2), © 2026 The SemVer-Trust Authors, CC BY 4.0.
+
+[policy]
+version   = "0.1"
+threshold = "T2"        # minimum effective trust for the clean channel
+strategy  = "demote"    # "demote" (recommended) | "inflate"
+
+[scopes]
+"services/auth/**"    = "auth"
+"services/billing/**" = "billing"
+"pkg/**"              = "common"
+"docs/**"             = "docs"
+# unmatched paths -> implicit "default" scope
+
+[scopes.weights]      # blast-radius criticality (low|moderate|high|critical)
+auth    = "critical"
+common  = "critical"
+billing = "high"
+docs    = "low"
+
+[meta]
+paths          = [".semver-trust/**", ".github/workflows/**", "CODEOWNERS"]
+required_level = "T3"
+
+[[derivation]]
+name    = "openapi-server"
+inputs  = ["api/openapi.yaml", "tools/oapi-codegen.version"]
+command = "make generate"           # toolchain pinned via the inputs above
+outputs = ["internal/gen/**"]
+
+[[derivation]]
+name    = "gofmt"
+inputs  = ["**/*.go"]
+command = "gofmt -l -w ."
+outputs = ["**/*.go"]               # formatting-only degenerate derivation (§4.4)
+
+[identity.human]
+allowed_signers = ".semver-trust/allowed_signers"   # ssh allowed-signers format
+oidc_issuers    = ["https://accounts.example.com"]  # gitsign identities mapped to people
+
+[identity.agent]
+oidc_issuers     = ["https://token.actions.githubusercontent.com"]
+subject_patterns = ["repo:acme/platform:*"]
+bot_accounts     = ["release-bot@acme.dev"]
+
+[trailers]
+require = true          # commits on protected branches must carry Provenance:
+
+[graph]
+adapter = "gomod"       # gomod | pnpm | cargo | bazel | none
+
+[evidence.go]
+compat                      = "apidiff"
+coverage_min_changed_lines  = 0.70
+
+[registry.npm]
+dist_tag_prefix = "trust-"
