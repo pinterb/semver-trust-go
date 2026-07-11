@@ -7,6 +7,7 @@ toolchain go1.26.5
 require (
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/pelletier/go-toml/v2 v2.4.3
+	golang.org/x/mod v0.38.0
 )
 
 require (
