@@ -19,7 +19,10 @@
 // The parser is strict (spec §6 hybrid-parser decision): it performs no
 // Masterminds-style coercion of short or v-less forms, and it rejects SemVer
 // build metadata, which the §7.1 grammar does not admit and which Go modules
-// reject (§7.4). Lenient plain-mode coercion lives elsewhere (GO-041).
+// reject (§7.4). Lenient plain-mode coercion is the separate ParseLenient
+// entry point (GO-041), scoped to the display/list/latest/next surface: it
+// never feeds trust operations, and it never coerces a trust shape — a tag
+// whose pre-release is trust-shaped is either §7.1-valid or invalid.
 //
 // Precedence follows SemVer 2.0.0 §11 (Compare, Sort); the trust suffix
 // participates as ordinary pre-release identifiers, so the "t10 < t2" and
