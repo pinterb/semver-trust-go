@@ -1,0 +1,338 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://semver-trust.dev/schemas/release-v0.1.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "title": "SemVer-Trust Release Attestation Statement (v0.1)",
+  "description": "A complete in-toto Statement carrying a SemVer-Trust release attestation predicate. Formalizes spec §8.1; predicate type https://semver-trust.dev/release/v0.1.",
+  "type": "object",
+  "required": ["_type", "subject", "predicateType", "predicate"],
+  "additionalProperties": false,
+  "properties": {
+    "_type": {
+      "description": "in-toto Statement type (spec §8).",
+      "const": "https://in-toto.io/Statement/v1"
+    },
+    "subject": {
+      "description": "Subjects bind the tag name to the release commit SHA and any artifact digests (spec §8.1).",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/subject" }
+    },
+    "predicateType": {
+      "description": "SemVer-Trust release predicate type URI (spec §8.1).",
+      "const": "https://semver-trust.dev/release/v0.1"
+    },
+    "predicate": {
+      "description": "The release attestation predicate (spec §8.1).",
+      "type": "object",
+      "required": ["component", "range", "trust", "commits", "evidence", "decision", "timestamp"],
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "description": "The releasable unit's scope name (spec §2, §5.1).",
+          "type": "string",
+          "minLength": 1
+        },
+        "range": {
+          "description": "The FROM..TO commit range this release covers (spec §5.2). git two-dot semantics.",
+          "type": "object",
+          "required": ["from", "to"],
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "description": "Previous tag or SHA. null for a first release, where FROM is the repository root (spec §5.2).",
+              "type": ["string", "null"],
+              "minLength": 1
+            },
+            "to": {
+              "description": "The release target commit (tag or SHA).",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "trust": {
+          "description": "Trust levels for the release: own trust vs effective trust (spec §5.2, §5.3, §8.1).",
+          "type": "object",
+          "required": ["effective", "own", "floor_source", "dependencies_pinned"],
+          "additionalProperties": false,
+          "properties": {
+            "effective": {
+              "description": "Effective trust after transitive propagation over internal deps (spec §5.3).",
+              "$ref": "#/$defs/trustLevel"
+            },
+            "own": {
+              "description": "Own trust: the per-scope floor before propagation (spec §5.2).",
+              "$ref": "#/$defs/trustLevel"
+            },
+            "floor_source": {
+              "description": "The internal dependency that floored effective trust, or null when no internal dep set the floor (own trust governs) (spec §5.3).",
+              "oneOf": [
+                { "type": "null" },
+                { "$ref": "#/$defs/componentVersion" }
+              ]
+            },
+            "dependencies_pinned": {
+              "description": "Internal dependency versions (or tree states) effective trust was computed against (spec §5.3). MUST be present; empty for a component with no internal deps.",
+              "type": "array",
+              "items": { "$ref": "#/$defs/componentVersion" }
+            }
+          }
+        },
+        "commits": {
+          "description": "The per-commit provenance vector. REQUIRED and preserved in full even though the tag encodes only the scalar level (spec §3.2, §8.1).",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["sha", "level", "authorship", "review"],
+            "additionalProperties": false,
+            "properties": {
+              "sha": {
+                "description": "The commit SHA.",
+                "type": "string",
+                "minLength": 1
+              },
+              "level": {
+                "description": "The commit's assigned trust level per the §3.2 authorship × review matrix (after derivation proofs, §4.4).",
+                "$ref": "#/$defs/trustLevel"
+              },
+              "authorship": {
+                "description": "Authorship class from the verified signer identity combined with provenance trailers (spec §3.2, §4.1, §4.2). Only class is REQUIRED.",
+                "type": "object",
+                "required": ["class"],
+                "additionalProperties": false,
+                "properties": {
+                  "class": {
+                    "description": "Authorship class. 'ambiguous' floors to the agent-authored row (spec §3.2).",
+                    "type": "string",
+                    "enum": ["human", "agent", "mixed", "ambiguous"]
+                  },
+                  "identity": {
+                    "description": "Verified signer identity (person or machine identity). Advisory here; the class is the signal.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "trailers": {
+                    "description": "Self-asserted, advisory git provenance trailers (spec §4.1). Open namespace: keys such as Provenance, Provenance-Agent, Provenance-Model, Co-authored-by, mapped to their string values.",
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                  }
+                }
+              },
+              "review": {
+                "description": "Review class from merge-time attestations (spec §3.2, §4.3). Only class is REQUIRED.",
+                "type": "object",
+                "required": ["class"],
+                "additionalProperties": false,
+                "properties": {
+                  "class": {
+                    "description": "Review class. 'agent' counts only when independent per §3.3; self-review is 'none' (spec §3.2).",
+                    "type": "string",
+                    "enum": ["human", "agent", "none"]
+                  },
+                  "identity": {
+                    "description": "Verified reviewer identity; distinct from the author's identity for T3 (spec §3.2).",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "attestation": {
+                    "description": "Reference to the covering review attestation (spec §4.3, §8.2).",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "derivations": {
+                "description": "Derivation rules whose verified reproducibility re-levelled paths in this commit (spec §4.4). Empty when none apply.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": {
+                    "name": {
+                      "description": "Derivation rule name as declared in policy (spec §9).",
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "evidence": {
+          "description": "Release evaluation evidence (spec §6). compat and coverage are optional: a missing differ or coverage provider is a legitimate honest-degradation state (P4, §1.1) — absence, never fabrication.",
+          "type": "object",
+          "required": ["blast_radius"],
+          "additionalProperties": false,
+          "properties": {
+            "compat": {
+              "description": "Compatibility differ result feeding the semantic floor (spec §6.1). Optional: absent when the ecosystem has no differ.",
+              "type": "object",
+              "required": ["provider", "result"],
+              "additionalProperties": false,
+              "properties": {
+                "provider": {
+                  "description": "Differ name and version, e.g. 'apidiff@v0.x' (spec §6.1).",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "result": {
+                  "description": "Differ verdict, e.g. 'compatible' or 'incompatible'. A detected breaking change forces MAJOR (spec §6.1).",
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "coverage_changed_lines": {
+              "description": "Fraction of changed lines covered by tests (spec §6.2). Optional: absent when no coverage provider ran.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "blast_radius": {
+              "description": "Blast radius: the score and its inputs MUST appear (spec §6.2).",
+              "type": "object",
+              "required": ["score", "inputs"],
+              "additionalProperties": false,
+              "properties": {
+                "loc": {
+                  "description": "Changed lines of code — a universal git input (spec §6.2).",
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "files": {
+                  "description": "Changed files — a universal git input (spec §6.2).",
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "fan_in": {
+                  "description": "Import-graph fan-in of touched packages, qualitatively (spec §6.2). Provider-sourced; numeric detail belongs in 'inputs'.",
+                  "type": "string",
+                  "enum": ["low", "moderate", "high"]
+                },
+                "score": {
+                  "description": "Qualitative blast score. Deliberately not a numeric formula (spec §6.2).",
+                  "type": "string",
+                  "enum": ["low", "moderate", "high"]
+                },
+                "inputs": {
+                  "description": "Extension point (spec §6.2): the full blast-radius input set and evidence-provider versions. Open by design; pluggable inputs are ecosystem-specific.",
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "decision": {
+          "description": "The release decision (spec §6.3, §6.4).",
+          "type": "object",
+          "required": ["claimed_bump", "semantic_floor", "strategy", "channel", "policy", "supersedes"],
+          "additionalProperties": false,
+          "properties": {
+            "claimed_bump": {
+              "description": "The bump this release claims (spec §6).",
+              "$ref": "#/$defs/bump"
+            },
+            "semantic_floor": {
+              "description": "The minimum bump the change semantics permit (spec §6.1).",
+              "$ref": "#/$defs/bump"
+            },
+            "strategy": {
+              "description": "Enforcement strategy when evidence does not support the claim (spec §6.3).",
+              "type": "string",
+              "enum": ["demote", "inflate"]
+            },
+            "channel": {
+              "description": "Release lane: clean (plain version) or prerelease (trust-carrying pre-release) (spec §2, §7).",
+              "type": "string",
+              "enum": ["clean", "prerelease"]
+            },
+            "policy": {
+              "description": "The policy file that produced this decision. Its digest MUST be pinned so the decision is reproducible (spec §8.1, §10).",
+              "type": "object",
+              "required": ["path", "digest"],
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "description": "Repository path to the policy file (spec §9).",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "digest": {
+                  "description": "Policy file digest in 'alg:value' form, e.g. 'sha256:<hex>'. REQUIRED for reproducibility (spec §8.1). Not hex-constrained so truncated documentation values validate.",
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "supersedes": {
+              "description": "Reference to the attestation this one supersedes, linking promotion/demotion chains; null for an original decision (spec §7.3, §8.1).",
+              "type": ["string", "null"],
+              "minLength": 1
+            }
+          }
+        },
+        "timestamp": {
+          "description": "Decision timestamp (RFC 3339 / ISO 8601).",
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "trustLevel": {
+      "description": "A SemVer-Trust level: count of independent accountable humans, with T1 the agent-corroboration rung (spec §3.1).",
+      "type": "string",
+      "enum": ["T0", "T1", "T2", "T3"]
+    },
+    "bump": {
+      "description": "A SemVer bump class (spec §6).",
+      "type": "string",
+      "enum": ["major", "minor", "patch"]
+    },
+    "digestSet": {
+      "description": "Extension point (spec §8.1): a map from digest-algorithm name (e.g. gitCommit, sha256, sha512) to its lowercase-hex value. Open by design; values are not hex-constrained so truncated documentation examples validate.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "subject": {
+      "description": "An in-toto subject: a name bound to a digest set (spec §8.1).",
+      "type": "object",
+      "required": ["name", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Subject name — the tag name for a release subject (spec §8.1).",
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": { "$ref": "#/$defs/digestSet" }
+      }
+    },
+    "componentVersion": {
+      "description": "A first-party component pinned to a version or tree state (spec §5.3).",
+      "type": "object",
+      "required": ["component", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "description": "Component scope name (spec §5.1).",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "description": "Consumed version or tree state (spec §5.3).",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

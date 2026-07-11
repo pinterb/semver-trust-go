@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://semver-trust.dev/schemas/review-v0.1.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "title": "SemVer-Trust Review Attestation Statement (v0.1)",
+  "description": "A complete in-toto Statement carrying a SemVer-Trust review attestation predicate, generated at merge time (spec §4.3). Predicate type https://semver-trust.dev/review/v0.1.",
+  "type": "object",
+  "required": ["_type", "subject", "predicateType", "predicate"],
+  "additionalProperties": false,
+  "properties": {
+    "_type": {
+      "description": "in-toto Statement type (spec §8).",
+      "const": "https://in-toto.io/Statement/v1"
+    },
+    "subject": {
+      "description": "Subjects are the merged commit SHAs the review covers (spec §4.3).",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/subject" }
+    },
+    "predicateType": {
+      "description": "SemVer-Trust review predicate type URI (spec §4.3).",
+      "const": "https://semver-trust.dev/review/v0.1"
+    },
+    "predicate": {
+      "description": "The review attestation predicate (spec §4.3, §3.3).",
+      "type": "object",
+      "required": ["reviewers", "pull_request", "merge_strategy", "timestamp"],
+      "additionalProperties": false,
+      "properties": {
+        "reviewers": {
+          "description": "Reviewer identities, classes, and verdicts (spec §4.3).",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["identity", "class", "verdict"],
+            "additionalProperties": false,
+            "properties": {
+              "identity": {
+                "description": "Verified reviewer identity (person or machine identity) (spec §4.2, §4.3).",
+                "type": "string",
+                "minLength": 1
+              },
+              "class": {
+                "description": "Reviewer class (spec §4.3).",
+                "type": "string",
+                "enum": ["human", "agent"]
+              },
+              "verdict": {
+                "description": "Approval verdict recorded at merge (spec §4.3).",
+                "type": "string",
+                "enum": ["approved", "changes_requested", "commented"]
+              },
+              "agent": {
+                "description": "For agent reviewers: reviewing tool and version, e.g. 'claude-code/2.8' (spec §3.3). Optional.",
+                "type": "string",
+                "minLength": 1
+              },
+              "model": {
+                "description": "For agent reviewers: model identifier (spec §3.3). Optional.",
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "pull_request": {
+          "description": "The PR/MR reference (spec §4.3). Either a plain reference string (URL or id) or a structured object.",
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": false,
+              "properties": {
+                "url": {
+                  "description": "PR/MR URL.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "number": {
+                  "description": "PR/MR number.",
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "repository": {
+                  "description": "Repository the PR/MR belongs to.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "title": {
+                  "description": "PR/MR title.",
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "merge_strategy": {
+          "description": "Merge strategy used. squash/rebase rewrite provenance and require pre-squash capture per §4.3.3 (not modelled in this v0.1 predicate).",
+          "type": "string",
+          "enum": ["merge", "squash", "rebase"]
+        },
+        "independence": {
+          "description": "Independence assessment for agent review (spec §3.3). These are assertions by the attesting workflow, not verifiable facts — recorded honestly as claims. Optional.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "separate_execution_context": {
+              "description": "Asserted: the reviewing agent ran in a separate execution context with no shared conversational or working state with the author (spec §3.3.1).",
+              "type": "boolean"
+            },
+            "distinct_identity": {
+              "description": "Asserted: the reviewer's identity differs from the author's (spec §3.3.2).",
+              "type": "boolean"
+            }
+          }
+        },
+        "timestamp": {
+          "description": "Merge/review timestamp (RFC 3339 / ISO 8601).",
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digestSet": {
+      "description": "Extension point (spec §8.1): a map from digest-algorithm name (e.g. gitCommit, sha256) to its lowercase-hex value. Open by design; values are not hex-constrained so truncated documentation examples validate.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "subject": {
+      "description": "An in-toto subject: a merged commit SHA bound to a digest set (spec §4.3, §8.1).",
+      "type": "object",
+      "required": ["name", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Subject name — the merged commit SHA or ref.",
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": { "$ref": "#/$defs/digestSet" }
+      }
+    }
+  }
+}

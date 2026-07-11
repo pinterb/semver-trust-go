@@ -77,7 +77,10 @@ func TestManifestPin(t *testing.T) {
 		t.Error("vendored LICENSE missing from the manifest")
 	}
 
-	// Every vector file pins the same spec_version as the manifest.
+	// Every vector file (a JSON document carrying a vectors array) pins the
+	// same spec_version as the manifest. Other vendored JSON — DSSE
+	// envelopes, the predicate schemas — legitimately carries none.
+	vectorFiles := 0
 	for name := range m.Files {
 		if !strings.HasSuffix(name, ".json") {
 			continue
@@ -87,14 +90,22 @@ func TestManifestPin(t *testing.T) {
 			t.Fatal(err)
 		}
 		var doc struct {
-			SpecVersion string `json:"spec_version"`
+			SpecVersion string          `json:"spec_version"`
+			Vectors     json.RawMessage `json:"vectors"`
 		}
 		if err := json.Unmarshal(data, &doc); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
+		if doc.Vectors == nil {
+			continue
+		}
+		vectorFiles++
 		if doc.SpecVersion != m.SpecVersion {
 			t.Errorf("%s pins spec_version %q, manifest pins %q", name, doc.SpecVersion, m.SpecVersion)
 		}
+	}
+	if vectorFiles < 7 {
+		t.Errorf("only %d vector files found in the manifest; expected at least 7", vectorFiles)
 	}
 }
 

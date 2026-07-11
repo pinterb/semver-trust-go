@@ -1,0 +1,49 @@
+{
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "spec_version": "0.2",
+  "description": "DSSE attestation verification vectors for SemVer-Trust (spec §4.3, §8.1-§8.2; docs/conformance-crypto-fixtures.md §6). Envelopes are vendored frozen bytes (signed bytes cannot be patched, only regenerated) built by build-attestation-envelopes.py; payloads use the real, frozen v0.1 predicate-type URIs with fake fixture-local subjects and test-only keys. Signature convention: the DSSE pre-authentication encoding (PAE) is signed as an OpenSSH SSHSIG with namespace attestation@semver-trust.dev; sig is the base64 of the armored SSHSIG; keyid is the signer's SHA256 fingerprint. The verifier consumes attestations/allowed_signers as injected trust material at the pinned verification_time (ADR-018), validates the payload against the vendored v0.1 JSON Schemas, and MUST distinguish a schema-invalid payload from an invalid signature — both abort, with distinct errors.",
+  "verification_time": "2026-01-01T00:00:00Z",
+  "allowed_signers": "allowed_signers",
+  "vectors": [
+    {
+      "id": "crypto/attest/review-valid",
+      "kind": "dsse_attestation",
+      "description": "A review attestation (§4.3) signed by the merge workflow's machine identity: signature verifies, payload validates against review-v0.1.json.",
+      "spec": "§4.3",
+      "inputs": { "envelope": "envelopes/review-valid.dsse.json" },
+      "expected": { "outcome": "verified", "signer": "ci-bot@semver-trust.test", "predicate_type": "https://semver-trust.dev/review/v0.1" }
+    },
+    {
+      "id": "crypto/attest/release-valid",
+      "kind": "dsse_attestation",
+      "description": "A release attestation (§8.1) with a full, internally coherent provenance vector over the signed-history fixture commits: signature verifies, payload validates against release-v0.1.json.",
+      "spec": "§8.1",
+      "inputs": { "envelope": "envelopes/release-valid.dsse.json" },
+      "expected": { "outcome": "verified", "signer": "ci-bot@semver-trust.test", "predicate_type": "https://semver-trust.dev/release/v0.1" }
+    },
+    {
+      "id": "crypto/attest/schema-invalid-aborts",
+      "kind": "dsse_attestation",
+      "description": "The signature is genuine but the payload omits the required 'decision' block: schema-invalid. The error MUST be distinct from a signature failure — a well-signed lie about shape is a different defect from a forgery (§8.2, GO-033 acceptance).",
+      "spec": "§8.1",
+      "inputs": { "envelope": "envelopes/release-schema-invalid.dsse.json" },
+      "expected": { "outcome": "verification_failed", "reason": "schema_invalid" }
+    },
+    {
+      "id": "crypto/attest/signature-invalid-aborts",
+      "kind": "dsse_attestation",
+      "description": "The payload was altered after signing (timestamp changed; still schema-valid): the signature no longer covers the bytes. Distinct from schema_invalid.",
+      "spec": "§8.2",
+      "inputs": { "envelope": "envelopes/release-sig-invalid.dsse.json" },
+      "expected": { "outcome": "verification_failed", "reason": "signature_invalid" }
+    },
+    {
+      "id": "crypto/attest/unknown-signer-aborts",
+      "kind": "dsse_attestation",
+      "description": "A well-formed envelope signed by a key absent from the attestation registry: the storage layer is never the trust anchor, the signature inside the attestation is (§8.2) — and an unenrolled signature anchors nothing.",
+      "spec": "§8.2",
+      "inputs": { "envelope": "envelopes/release-unknown-signer.dsse.json" },
+      "expected": { "outcome": "verification_failed", "reason": "unknown_signer" }
+    }
+  ]
+}

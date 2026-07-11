@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# semver-trust conformance attestation-signer registry — TEST KEYS, DO NOT USE.
+# Injected trust material (ADR-018) for DSSE attestation verification: the
+# merge/release workflow identity, scoped to the attestation namespace. A
+# commit-signing enrollment (namespaces="git") can never vouch for an
+# attestation, and vice versa — the namespace binds the purpose.
+ci-bot@semver-trust.test namespaces="attestation@semver-trust.dev" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGP+sxSQ/8Ebhsg0vTvZrAMqs83lcoMCtukRiVmbM8JH semver-trust-conformance TEST KEY - DO NOT USE (agent-ci-bot)
