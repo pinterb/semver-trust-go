@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Secret-scanning configuration. The only allowlisted paths are the vendored
+# conformance test keys (ADR-021 digest-pinned copies of the spec repo's
+# conformance/crypto/keys/), whose private halves are committed on purpose as
+# clearly-labeled test doubles — see the spec repo's
+# docs/conformance-crypto-fixtures.md §2.4: scanner allowlisting is explicit,
+# not silent. Every such key's comment contains "semver-trust-conformance
+# TEST KEY - DO NOT USE" and none is enrolled in any real trust anchor.
+
+title = "semver-trust-go gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Vendored conformance test keys — intentional test material, not secrets"
+paths = ['''conformance/vendor/crypto/keys/.*''']
