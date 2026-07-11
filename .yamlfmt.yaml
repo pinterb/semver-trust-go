@@ -39,5 +39,8 @@ include:
   - '**/*.yaml'
   - '**/*.yml'
 
-exclude:
-  - ".git/**"
+# No exclude for .git/**: yamlfmt applies config excludes even when task
+# lint:yaml passes an explicit tracked-file list, and stat(".git/**") is a
+# fatal error in a linked worktree, where .git is a file (the same breakage
+# the tracked-files-only lint:yaml change addressed). The exclude is
+# redundant there — git ls-files never lists .git contents.
