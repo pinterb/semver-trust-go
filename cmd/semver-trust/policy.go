@@ -82,16 +82,16 @@ verbatim and exit non-zero.`,
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "policy %s is valid (schema %s)\n", path, p.Version)
-			fmt.Fprintf(out, "digest:      sha256:%s\n", p.Digest)
-			fmt.Fprintf(out, "threshold:   %s\n", p.Threshold)
-			fmt.Fprintf(out, "strategy:    %s\n", p.Strategy)
-			fmt.Fprintf(out, "scopes:      %d glob(s), %d weight(s)\n", len(p.Scopes), len(p.Weights))
-			fmt.Fprintf(out, "meta-paths:  %d at required level %s\n", len(p.Meta.Paths), p.Meta.RequiredLevel)
-			fmt.Fprintf(out, "derivations: %d\n", len(p.Derivations))
-			fmt.Fprintf(out, "graph:       %s\n", p.GraphAdapter)
-			return nil
+			e := &errWriter{w: cmd.OutOrStdout()}
+			e.printf("policy %s is valid (schema %s)\n", path, p.Version)
+			e.printf("digest:      sha256:%s\n", p.Digest)
+			e.printf("threshold:   %s\n", p.Threshold)
+			e.printf("strategy:    %s\n", p.Strategy)
+			e.printf("scopes:      %d glob(s), %d weight(s)\n", len(p.Scopes), len(p.Weights))
+			e.printf("meta-paths:  %d at required level %s\n", len(p.Meta.Paths), p.Meta.RequiredLevel)
+			e.printf("derivations: %d\n", len(p.Derivations))
+			e.printf("graph:       %s\n", p.GraphAdapter)
+			return e.err
 		},
 	}
 	addPolicyFlags(cmd, &repoPath, &policyPath)
@@ -122,12 +122,14 @@ meta-paths, and derivation rules.`,
 
 // writeExplain renders the decision table in effect and the policy summary.
 func writeExplain(out io.Writer, p *policy.Policy, path string) error {
-	fmt.Fprintf(out, "decision table in effect (§6.4 default) — policy %s\n\n", path)
-	fmt.Fprintf(out, "threshold: %s (minimum effective trust for the clean channel)\n", p.Threshold)
-	fmt.Fprintf(out, "strategy:  %s — %s\n\n", p.Strategy, strategyNote(p.Strategy))
+	e := &errWriter{w: out}
+	e.printf("decision table in effect (§6.4 default) — policy %s\n\n", path)
+	e.printf("threshold: %s (minimum effective trust for the clean channel)\n", p.Threshold)
+	e.printf("strategy:  %s — %s\n\n", p.Strategy, strategyNote(p.Strategy))
 
 	tw := tabwriter.NewWriter(out, 2, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "trust\tblast low\tblast moderate\tblast high")
+	et := &errWriter{w: tw}
+	et.println("trust\tblast low\tblast moderate\tblast high")
 	for _, level := range []trust.Level{trust.T0, trust.T1, trust.T2, trust.T3} {
 		row := []string{level.String()}
 		for _, blast := range []trust.Blast{trust.BlastLow, trust.BlastModerate, trust.BlastHigh} {
@@ -137,26 +139,29 @@ func writeExplain(out io.Writer, p *policy.Policy, path string) error {
 			}
 			row = append(row, cell.String())
 		}
-		fmt.Fprintln(tw, strings.Join(row, "\t"))
+		et.println(strings.Join(row, "\t"))
+	}
+	if et.err != nil {
+		return et.err
 	}
 	if err := tw.Flush(); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(out, `
+	e.printf(`
 cells: "clean" releases the plain version on the clean channel; "differ proof
 (patch)" needs a compatibility-differ proof for PATCH claims and "differ proof
 (any)" for every claim — without one the cell demotes (honest degradation,
 §1.1); "pre-release" always demotes. A demoted release %s.
 `, demotionNote(p.Strategy))
 
-	fmt.Fprintln(out)
+	e.println()
 	if len(p.Scopes) == 0 {
-		fmt.Fprintln(out, "scopes:      none declared (every path is the implicit \"default\" scope)")
+		e.println("scopes:      none declared (every path is the implicit \"default\" scope)")
 	} else {
-		fmt.Fprintf(out, "scopes:      %d glob(s)\n", len(p.Scopes))
+		e.printf("scopes:      %d glob(s)\n", len(p.Scopes))
 		for _, glob := range sortedKeys(p.Scopes) {
-			fmt.Fprintf(out, "  %s -> %s\n", glob, p.Scopes[glob])
+			e.printf("  %s -> %s\n", glob, p.Scopes[glob])
 		}
 	}
 	if len(p.Weights) > 0 {
@@ -164,21 +169,21 @@ cells: "clean" releases the plain version on the clean channel; "differ proof
 		for _, scope := range sortedKeys(p.Weights) {
 			pairs = append(pairs, fmt.Sprintf("%s=%s", scope, p.Weights[scope]))
 		}
-		fmt.Fprintf(out, "weights:     %s\n", strings.Join(pairs, ", "))
+		e.printf("weights:     %s\n", strings.Join(pairs, ", "))
 	}
-	fmt.Fprintf(out, "meta-paths:  %s (required level %s)\n",
+	e.printf("meta-paths:  %s (required level %s)\n",
 		strings.Join(p.Meta.Paths, ", "), p.Meta.RequiredLevel)
 	if len(p.Derivations) == 0 {
-		fmt.Fprintln(out, "derivations: none")
+		e.println("derivations: none")
 	} else {
 		names := make([]string, len(p.Derivations))
 		for i, d := range p.Derivations {
 			names[i] = d.Name
 		}
-		fmt.Fprintf(out, "derivations: %s\n", strings.Join(names, ", "))
+		e.printf("derivations: %s\n", strings.Join(names, ", "))
 	}
-	fmt.Fprintf(out, "graph:       %s\n", p.GraphAdapter)
-	return nil
+	e.printf("graph:       %s\n", p.GraphAdapter)
+	return e.err
 }
 
 // strategyNote is the one-line §6.3 meaning of the configured strategy.

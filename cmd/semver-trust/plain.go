@@ -30,10 +30,12 @@ func plainTags(repoPath string) ([]string, error) {
 
 // warnRejected surfaces the invalid-tag count on stderr — lenient filtering
 // is allowed in plain mode, silent dropping is not (audit §5.2).
-func warnRejected(cmd *cobra.Command, rejected int) {
-	if rejected > 0 {
-		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %d invalid tag(s) ignored\n", rejected)
+func warnRejected(cmd *cobra.Command, rejected int) error {
+	if rejected == 0 {
+		return nil
 	}
+	_, err := fmt.Fprintf(cmd.ErrOrStderr(), "warning: %d invalid tag(s) ignored\n", rejected)
+	return err
 }
 
 // incrementFlags registers the donor's increment flag set on cmd. The bare
@@ -92,26 +94,32 @@ reason rather than silently dropped. --strict shows only §7.1-valid tags.`,
 			entries := plain.Classify(tags)
 			plain.SortEntries(entries)
 
+			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 0, 2, ' ', 0)
+			et := &errWriter{w: tw}
+
 			if strict {
 				rejected := 0
-				tw := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 0, 2, ' ', 0)
 				for _, e := range entries {
 					if e.Err != nil || e.Val.Coerced {
 						rejected++
 						continue
 					}
-					fmt.Fprintf(tw, "%s\t%s\n", e.Val.Version, e.Val.Version.Kind())
+					et.printf("%s\t%s\n", e.Val.Version, e.Val.Version.Kind())
+				}
+				if et.err != nil {
+					return et.err
 				}
 				if err := tw.Flush(); err != nil {
 					return err
 				}
-				warnRejected(cmd, rejected)
-				return nil
+				return warnRejected(cmd, rejected)
 			}
 
-			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 0, 2, ' ', 0)
 			for _, e := range entries {
-				fmt.Fprintf(tw, "%s\n", strings.Join(listRow(e), "\t"))
+				et.printf("%s\n", strings.Join(listRow(e), "\t"))
+			}
+			if et.err != nil {
+				return et.err
 			}
 			return tw.Flush()
 		},
@@ -157,7 +165,9 @@ tags are ignored with a count on stderr, never silently.`,
 			if err != nil {
 				return err
 			}
-			warnRejected(cmd, rejected)
+			if err := warnRejected(cmd, rejected); err != nil {
+				return err
+			}
 			latest, err := plain.Latest(valid)
 			if err != nil {
 				return err
@@ -205,7 +215,9 @@ func computeNext(cmd *cobra.Command, repoPath, incr, preid, defv string) (versio
 	if err != nil {
 		return version.Version{}, err
 	}
-	warnRejected(cmd, rejected)
+	if err := warnRejected(cmd, rejected); err != nil {
+		return version.Version{}, err
+	}
 	return plain.Next(valid, rt, preid)
 }
 
