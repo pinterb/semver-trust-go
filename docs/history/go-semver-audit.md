@@ -1,6 +1,9 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # go-semver Audit (GO-005) — Input to Decision D2
 
+> **Frozen record**: the legacy go-semver port audit that fed decision D2
+> and ADR-020. Project-internal; kept for provenance of the ported code.
+
 **Status:** complete · **Date:** 2026-07-06 · **Author:** agent (GO-005) ·
 **Reviewer:** maintainer (pinterb)
 **Purpose:** make decision **D2** decidable — *"incorporate `go-semver` as reviewed

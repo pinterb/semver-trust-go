@@ -1,6 +1,11 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # semver-trust-go — Implementation Plan
 
+> **Frozen planning record** of the build phase (GO-NNN work items,
+> decision packets D1–D4). Spec-version references (draft v0.2) are as of
+> its writing and are not maintained. For current documentation start at
+> [../README.md](../README.md).
+
 **Status:** active plan · **Date:** 2026-07-06 · **Owner:** maintainer (pinterb)
 **Audience:** any human or agent executing build-phase work. This document is
 detailed enough to start from zero context; read §1 before touching anything.

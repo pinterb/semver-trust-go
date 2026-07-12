@@ -132,4 +132,4 @@ and its drift check.
 
 Releases are cut with the tool's own `release` command following the repeatable
 cadence in [`docs/release-runbook.md`](docs/release-runbook.md); the first
-release is recorded in [`docs/first-release.md`](docs/first-release.md).
+release is recorded in [`docs/history/first-release.md`](docs/history/first-release.md).

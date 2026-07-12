@@ -2,7 +2,7 @@
 # Release runbook
 
 The repeatable cadence for cutting a trust-tagged release of semver-trust-go
-with its own tooling. This is the **living process**; [first-release.md](first-release.md)
+with its own tooling. This is the **living process**; [history/first-release.md](history/first-release.md)
 is the historical record of the very first (`v0.1.0`) ceremony. Steps marked
 **MANUAL** are the maintainer's accountability acts and cannot be delegated —
 signing an attestation asserts *you stand behind the code* (specification

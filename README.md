@@ -127,9 +127,10 @@ the command tree via `task docs:cli`).
 
 ## Documentation
 
+**[The documentation index](docs/README.md)** maps everything — persona
+guides, reference pages, and this repository's own docs. The most-taken paths:
+
 - [Concepts](docs/concepts.md) — what SemVer-Trust is and why, in plain language.
-- [Architecture](docs/architecture.md) — the package map and the injected-clock invariant.
-- [Release runbook](docs/release-runbook.md) — the repeatable release cadence.
 - [CLI reference](docs/cli/semver-trust.md) — every command and flag.
 - [Contributing](CONTRIBUTING.md) — dev environment, quality gates, and PR lifecycle.
 - [Specification](https://github.com/semver-trust/spec) and its
@@ -139,8 +140,8 @@ the command tree via `task docs:cli`).
 
 This repository practices the scheme it implements. Every commit in its history
 is signed and carries `Provenance:` trailers, from the first commit onward, and
-`v0.1.0` is released with a trust-tagged, reproducible release attestation —
-the practice is now demonstrated, not merely intended.
+its releases (`v0.1.0`, `v0.2.0`, …) ship with trust-tagged, reproducible
+release attestations — the practice is demonstrated, not merely intended.
 
 ## License and trademark
 
