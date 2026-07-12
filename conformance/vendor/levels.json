@@ -1,6 +1,6 @@
 {
   "$comment": "SPDX-License-Identifier: Apache-2.0",
-  "spec_version": "0.2",
+  "spec_version": "0.3",
   "description": "Per-commit trust level assignment vectors for SemVer-Trust (spec/semver-trust.md §3.2, §3.3, §4.1-§4.2, Appendix B). 'matrix' vectors carry already-classified authorship/review classes and assert the resulting level; 'classify' vectors carry raw commit facts and assert both the derived classes and the level.",
   "vectors": [
     {
@@ -301,6 +301,63 @@
         "review": null
       },
       "expected": { "authorship": "human", "review": "none", "level": "T2" }
+    },
+    {
+      "id": "levels/classify/agent-trailer-same-identity-human-review",
+      "kind": "classify",
+      "description": "Honestly agent-trailered work under a human signer, post-hoc reviewed by that same human: the reviewer is the first — and only — accountable human, so agent/human = T2 (§3.1, §3.2 note 2 as clarified by ADR-025). The self-review exclusion prevents one human counting twice, never once.",
+      "spec": "§3.2",
+      "inputs": {
+        "signer_identity_class": "human",
+        "trailers": { "Provenance": "agent", "Provenance-Agent": "claude-code/2.8" },
+        "policy": { "trailers_require": true },
+        "review": {
+          "reviewer_identity_class": "human",
+          "reviewer_identity": "alice@example.com",
+          "author_identity": "alice@example.com",
+          "separate_context": false,
+          "signed_attestation": true
+        }
+      },
+      "expected": { "authorship": "agent", "review": "human_distinct", "level": "T2" }
+    },
+    {
+      "id": "levels/classify/mixed-same-identity-human-review",
+      "kind": "classify",
+      "description": "Mixed authorship reviewed by the signer: mixed contributes no counted human author, so the same-identity human review adds the one accountable human — mixed/human = T2 (ADR-025).",
+      "spec": "§3.2",
+      "inputs": {
+        "signer_identity_class": "human",
+        "trailers": { "Provenance": "mixed" },
+        "policy": { "trailers_require": true },
+        "review": {
+          "reviewer_identity_class": "human",
+          "reviewer_identity": "alice@example.com",
+          "author_identity": "alice@example.com",
+          "separate_context": false,
+          "signed_attestation": true
+        }
+      },
+      "expected": { "authorship": "mixed", "review": "human_distinct", "level": "T2" }
+    },
+    {
+      "id": "levels/classify/ambiguous-same-identity-human-review",
+      "kind": "classify",
+      "description": "Ambiguous authorship (machine signer claiming human) reviewed by a human whose identity matches the signer principal: ambiguity floors the authorship row, and the human review still counts once — ambiguous/human = T2 (ADR-025).",
+      "spec": "§3.2",
+      "inputs": {
+        "signer_identity_class": "agent",
+        "trailers": { "Provenance": "human" },
+        "policy": { "trailers_require": true },
+        "review": {
+          "reviewer_identity_class": "human",
+          "reviewer_identity": "release-bot@acme.dev",
+          "author_identity": "release-bot@acme.dev",
+          "separate_context": false,
+          "signed_attestation": true
+        }
+      },
+      "expected": { "authorship": "ambiguous", "review": "human_distinct", "level": "T2" }
     }
   ]
 }

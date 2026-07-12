@@ -371,7 +371,7 @@ func releaseStatementInput(report *verify.Report, comp verify.ComponentEffective
 			SHA:               c.SHA,
 			Level:             c.Level,
 			AuthorshipClass:   c.Authorship,
-			AuthorIdentity:    c.Signer,
+			SignerIdentity:    c.Signer,
 			Trailers:          c.Trailers,
 			ReviewClass:       predicateReviewClass(c.Review),
 			ReviewerIdentity:  c.ReviewIdentity,

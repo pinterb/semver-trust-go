@@ -68,10 +68,15 @@ type ReviewFacts struct {
 	// Reviewer is the verified reviewer's identity class.
 	Reviewer IdentityClass
 
-	// ReviewerIdentity and AuthorIdentity are the verified identities used
-	// for the distinct-identity tests (§3.2 note 2, §3.3 condition 2).
+	// ReviewerIdentity and SignerIdentity are the verified identities used
+	// for the same-identity tests (§3.2 note 2, §3.3 condition 2).
+	// SignerIdentity is the COMMIT's verified signer principal — not
+	// necessarily a counted human author: after an honest Provenance: agent
+	// trailer, authorship classifies agent and the signer is nobody's
+	// author (ADR-025; the old name AuthorIdentity caused exactly that
+	// conflation).
 	ReviewerIdentity string
-	AuthorIdentity   string
+	SignerIdentity   string
 
 	// SeparateContext reports whether the reviewing agent ran in a separate
 	// execution context with no shared conversational or working state with
@@ -87,7 +92,7 @@ type ReviewFacts struct {
 // facts and assigns the §3.2 level.
 func Classify(f CommitFacts) (Authorship, Review, Level) {
 	a := classifyAuthorship(f)
-	r := classifyReview(f.Review)
+	r := classifyReview(a, f.Review)
 	return a, r, AssignLevel(a, r)
 }
 
@@ -130,24 +135,32 @@ func classifyAuthorship(f CommitFacts) Authorship {
 	}
 }
 
-// classifyReview collapses non-qualifying reviews to ReviewNone. Agent review
-// qualifies only when all three §3.3 independence conditions hold. Human
-// review qualifies only with a distinct verified identity (§3.2 note 2) and a
-// signed attestation — review facts live outside git and count only once
-// captured and verifiable (§4.3); an unattested review is an unverifiable
-// claim and is treated as absent. Separate execution context is an
-// agent-review condition (§3.3(1)) and is not consulted for human review.
-func classifyReview(r *ReviewFacts) Review {
-	if r == nil || !r.SignedAttestation || r.ReviewerIdentity == r.AuthorIdentity {
+// classifyReview collapses non-qualifying reviews to ReviewNone, and is
+// authorship-aware per ADR-025: the self-review exclusion prevents one human
+// from counting twice, never from counting once. Agent review qualifies only
+// when all three §3.3 independence conditions hold — including a reviewer
+// identity distinct from the signer, since self-checking corroborates
+// nothing. Human review requires a signed attestation (§4.3: an unattested
+// review is an unverifiable claim, treated as absent); the same-identity
+// exclusion applies only when the authorship class is human — for agent-,
+// mixed-, or ambiguous-authored commits no human author is counted, so a
+// same-identity human review adds the first accountable human (agent +
+// human = T2). Separate execution context is an agent-review condition
+// (§3.3(1)) and is not consulted for human review.
+func classifyReview(a Authorship, r *ReviewFacts) Review {
+	if r == nil || !r.SignedAttestation {
 		return ReviewNone
 	}
 	switch r.Reviewer {
 	case IdentityAgent:
-		if r.SeparateContext {
-			return ReviewAgentIndependent
+		if !r.SeparateContext || r.ReviewerIdentity == r.SignerIdentity {
+			return ReviewNone
 		}
-		return ReviewNone
+		return ReviewAgentIndependent
 	case IdentityHuman:
+		if a == AuthorshipHuman && r.ReviewerIdentity == r.SignerIdentity {
+			return ReviewNone
+		}
 		return ReviewHumanDistinct
 	default:
 		return ReviewNone

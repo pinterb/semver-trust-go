@@ -123,7 +123,7 @@ func TestClassify(t *testing.T) {
 				Review: &ReviewFacts{
 					Reviewer:          IdentityAgent,
 					ReviewerIdentity:  "agent-a",
-					AuthorIdentity:    "agent-a",
+					SignerIdentity:    "agent-a",
 					SeparateContext:   true,
 					SignedAttestation: true,
 				},
@@ -141,7 +141,7 @@ func TestClassify(t *testing.T) {
 				Review: &ReviewFacts{
 					Reviewer:          IdentityAgent,
 					ReviewerIdentity:  "agent-b",
-					AuthorIdentity:    "agent-a",
+					SignerIdentity:    "agent-a",
 					SeparateContext:   false,
 					SignedAttestation: true,
 				},
@@ -159,7 +159,7 @@ func TestClassify(t *testing.T) {
 				Review: &ReviewFacts{
 					Reviewer:          IdentityAgent,
 					ReviewerIdentity:  "agent-b",
-					AuthorIdentity:    "agent-a",
+					SignerIdentity:    "agent-a",
 					SeparateContext:   true,
 					SignedAttestation: false,
 				},
@@ -177,7 +177,7 @@ func TestClassify(t *testing.T) {
 				Review: &ReviewFacts{
 					Reviewer:          IdentityAgent,
 					ReviewerIdentity:  "agent-b",
-					AuthorIdentity:    "agent-a",
+					SignerIdentity:    "agent-a",
 					SeparateContext:   true,
 					SignedAttestation: true,
 				},
@@ -195,7 +195,7 @@ func TestClassify(t *testing.T) {
 				Review: &ReviewFacts{
 					Reviewer:          IdentityHuman,
 					ReviewerIdentity:  "alice@example.com",
-					AuthorIdentity:    "alice@example.com",
+					SignerIdentity:    "alice@example.com",
 					SeparateContext:   true,
 					SignedAttestation: true,
 				},
@@ -214,7 +214,7 @@ func TestClassify(t *testing.T) {
 				Review: &ReviewFacts{
 					Reviewer:          IdentityHuman,
 					ReviewerIdentity:  "bob@example.com",
-					AuthorIdentity:    "alice@example.com",
+					SignerIdentity:    "alice@example.com",
 					SeparateContext:   true,
 					SignedAttestation: false,
 				},
@@ -231,7 +231,7 @@ func TestClassify(t *testing.T) {
 				Review: &ReviewFacts{
 					Reviewer:          IdentityHuman,
 					ReviewerIdentity:  "bob@example.com",
-					AuthorIdentity:    "alice@example.com",
+					SignerIdentity:    "alice@example.com",
 					SeparateContext:   true,
 					SignedAttestation: true,
 				},
@@ -239,6 +239,60 @@ func TestClassify(t *testing.T) {
 			wantAuthorship: AuthorshipHuman,
 			wantReview:     ReviewHumanDistinct,
 			wantLevel:      T3,
+		},
+		{
+			// ADR-025: the self-review exclusion prevents one human counting
+			// twice, never once — honestly agent-trailered work reviewed by
+			// its own signer gains its first accountable human.
+			name: "agent-trailered commit reviewed by its signer",
+			facts: CommitFacts{
+				Signer:           IdentityHuman,
+				Provenance:       ProvenanceAgent,
+				TrailersRequired: true,
+				Review: &ReviewFacts{
+					Reviewer:          IdentityHuman,
+					ReviewerIdentity:  "alice@example.com",
+					SignerIdentity:    "alice@example.com",
+					SignedAttestation: true,
+				},
+			},
+			wantAuthorship: AuthorshipAgent,
+			wantReview:     ReviewHumanDistinct,
+			wantLevel:      T2,
+		},
+		{
+			name: "mixed commit reviewed by its signer",
+			facts: CommitFacts{
+				Signer:           IdentityHuman,
+				Provenance:       ProvenanceMixed,
+				TrailersRequired: true,
+				Review: &ReviewFacts{
+					Reviewer:          IdentityHuman,
+					ReviewerIdentity:  "alice@example.com",
+					SignerIdentity:    "alice@example.com",
+					SignedAttestation: true,
+				},
+			},
+			wantAuthorship: AuthorshipMixed,
+			wantReview:     ReviewHumanDistinct,
+			wantLevel:      T2,
+		},
+		{
+			name: "ambiguous commit reviewed by its signer",
+			facts: CommitFacts{
+				Signer:           IdentityAgent,
+				Provenance:       ProvenanceHuman,
+				TrailersRequired: true,
+				Review: &ReviewFacts{
+					Reviewer:          IdentityHuman,
+					ReviewerIdentity:  "release-bot@acme.dev",
+					SignerIdentity:    "release-bot@acme.dev",
+					SignedAttestation: true,
+				},
+			},
+			wantAuthorship: AuthorshipAmbiguous,
+			wantReview:     ReviewHumanDistinct,
+			wantLevel:      T2,
 		},
 		{
 			// Human review needs no separate execution context — §3.3(1) is
@@ -250,7 +304,7 @@ func TestClassify(t *testing.T) {
 				Review: &ReviewFacts{
 					Reviewer:          IdentityHuman,
 					ReviewerIdentity:  "bob@example.com",
-					AuthorIdentity:    "alice@example.com",
+					SignerIdentity:    "alice@example.com",
 					SeparateContext:   false,
 					SignedAttestation: true,
 				},

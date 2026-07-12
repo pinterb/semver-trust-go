@@ -1,6 +1,6 @@
 {
   "$comment": "SPDX-License-Identifier: Apache-2.0",
-  "spec_version": "0.2",
+  "spec_version": "0.3",
   "description": "Transitive-propagation vectors for SemVer-Trust (spec/semver-trust.md §5.3). Each vector carries an internal dependency graph — nodes with per-component own trust, directed edges [consumer, dependency] — and asserts the effective trust of every node: effective(C) = min(own(C), min over deps D of effective(D)), with dependency cycles collapsed to their strongly connected component. Where 'floor_source' is asserted it names, per node, the component whose own trust set the floor (the node itself when its own trust attains the minimum).",
   "vectors": [
     {

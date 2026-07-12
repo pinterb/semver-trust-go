@@ -1,6 +1,6 @@
 {
   "$comment": "SPDX-License-Identifier: Apache-2.0",
-  "spec_version": "0.2",
+  "spec_version": "0.3",
   "description": "DSSE attestation verification vectors for SemVer-Trust (spec §4.3, §8.1-§8.2; docs/conformance-crypto-fixtures.md §6). Envelopes are vendored frozen bytes (signed bytes cannot be patched, only regenerated) built by build-attestation-envelopes.py; payloads use the real, frozen v0.1 predicate-type URIs with fake fixture-local subjects and test-only keys. Signature convention: the DSSE pre-authentication encoding (PAE) is signed as an OpenSSH SSHSIG with namespace attestation@semver-trust.dev; sig is the base64 of the armored SSHSIG; keyid is the signer's SHA256 fingerprint. The verifier consumes attestations/allowed_signers as injected trust material at the pinned verification_time (ADR-018), validates the payload against the vendored v0.1 JSON Schemas, and MUST distinguish a schema-invalid payload from an invalid signature — both abort, with distinct errors.",
   "verification_time": "2026-01-01T00:00:00Z",
   "allowed_signers": "allowed_signers",

@@ -72,7 +72,7 @@ type policy struct {
 type reviewInputs struct {
 	ReviewerIdentityClass string `json:"reviewer_identity_class"`
 	ReviewerIdentity      string `json:"reviewer_identity"`
-	AuthorIdentity        string `json:"author_identity"`
+	SignerIdentity        string `json:"author_identity"`
 	SeparateContext       bool   `json:"separate_context"`
 	SignedAttestation     bool   `json:"signed_attestation"`
 }
@@ -202,7 +202,7 @@ func TestConformanceClassify(t *testing.T) {
 				facts.Review = &ReviewFacts{
 					Reviewer:          parseIdentityClass(t, rf.ReviewerIdentityClass),
 					ReviewerIdentity:  rf.ReviewerIdentity,
-					AuthorIdentity:    rf.AuthorIdentity,
+					SignerIdentity:    rf.SignerIdentity,
 					SeparateContext:   rf.SeparateContext,
 					SignedAttestation: rf.SignedAttestation,
 				}

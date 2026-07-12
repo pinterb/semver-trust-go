@@ -1,6 +1,6 @@
 {
   "$comment": "SPDX-License-Identifier: Apache-2.0",
-  "spec_version": "0.2",
+  "spec_version": "0.3",
   "description": "SemVer 2.0.0 precedence and §7.1 tag-grammar vectors for SemVer-Trust (spec/semver-trust.md §7.1, §7.2). 'precedence' vectors are strictly ascending ordered lists (a harness parses each entry, sorts, and compares to the given order). 'grammar' vectors map a tag string to a parse outcome and, for parseable tags, its components.",
   "vectors": [
     {

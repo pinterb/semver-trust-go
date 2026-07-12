@@ -30,7 +30,7 @@ type ReleaseCommit struct {
 	Level string // "T0".."T3"
 
 	AuthorshipClass string // "human" | "agent" | "mixed" | "ambiguous"
-	AuthorIdentity  string // verified signer identity (advisory here)
+	SignerIdentity  string // verified signer identity (advisory here)
 	// Trailers are the commit's self-asserted provenance trailers (§4.1),
 	// advisory by definition.
 	Trailers map[string]string
@@ -280,7 +280,7 @@ func BuildReleaseStatement(in ReleaseInput) ([]byte, error) {
 			Level: c.Level,
 			Authorship: releaseAuthorshipJSON{
 				Class:    c.AuthorshipClass,
-				Identity: c.AuthorIdentity,
+				Identity: c.SignerIdentity,
 				Trailers: c.Trailers,
 			},
 			Review: releaseReviewJSON{

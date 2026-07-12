@@ -1,20 +1,20 @@
 {
   "$comment": "SPDX-License-Identifier: Apache-2.0",
-  "spec_version": "0.2",
+  "spec_version": "0.3",
   "source": {
     "repository": "https://github.com/semver-trust/spec",
-    "commit": "8d2370c49db8ae0e7866aa51eab772cbfa1e93a9"
+    "commit": "107b63cd99285edc7d13e5d96ba691348b05ae69"
   },
   "files": {
-    "levels.json": "sha256:bcd117ae2b1a83838d829394716f1ff35dcdb66e0500405379f7bbf1945bf6b4",
-    "precedence.json": "sha256:d4fe8b6671f2009a1ee1cca1d97559fa2476882ceae4cac76ea7d14bdb7eb3cf",
-    "aggregation.json": "sha256:7b6cbed22c01706f231d1d48a740dc46aac883e01aa9009cd65560ab33284d66",
-    "propagation.json": "sha256:f7afcc7343e224b1eaee5621dd7ccc352ffeb7eb2101440eec3f6dd6ecefbdba",
-    "decision.json": "sha256:01e2e2ac72f875961e8213ca19d1051c15e091174f93009653d39cf07ad00d6a",
+    "levels.json": "sha256:483d8921a45d030e84841f8c59e9c4519ccd6de3fc7a11fc236927f159566901",
+    "precedence.json": "sha256:cc400bae0352d33f7484eebd473cfee2f5cc36d06bcfde1f70f07ac07b1b19d9",
+    "aggregation.json": "sha256:5bb298cd25e04bd7eb24056d5f5fca439bbdef509a8443a3778be370f399ecbc",
+    "propagation.json": "sha256:a980015202550a9a652ec22064c5d4d83ffd53bf673569f2cb8c80da7c384dae",
+    "decision.json": "sha256:b6274a9d19b7918a53439a8a9b4b9121ff4311892cae77dbc00004c6f29550d5",
     "LICENSE": "sha256:c95bae1d1ce0235ecccd3560b772ec1efb97f348a79f0fbe0a634f0c2ccefe2c",
     "crypto/allowed_signers": "sha256:12eb6da1715c0eac4e93f602a299d8581008894d619c80024a177e09220c1c02",
     "crypto/build-fixture-repos.sh": "sha256:4cc404ef6c895663708d9a0f9c877fdeea6d1bf6ac0e72205e8ad06b9f611402",
-    "crypto/signature-vectors.json": "sha256:149cf16da31592da14c7487c0756c40293a2ecebe06952be2e2aa3df544fdaa5",
+    "crypto/signature-vectors.json": "sha256:1b132e6140f9e0db0157c6c34f710565023ed857a6ed9d2aa8752431a373440a",
     "crypto/keys/human-alice": "sha256:ec78114adad7a314a9f1031e907cb4f1dce57af4e73b77a4c3ff7b2bdb2ca71f",
     "crypto/keys/human-alice.pub": "sha256:732eac3772540d8d8ac5314e8a0d2a638054145580e286d9daa041b614f932cc",
     "crypto/keys/human-bob": "sha256:58162541beca5ba0d245d0b408a153c7e64da08a52fe481e4f26433c40c7b46d",
@@ -26,7 +26,7 @@
     "crypto/keys/revoked-carol": "sha256:a1744aec5abcfbe15541c5bcc152000a09781049a7e1098b702576aa615a9788",
     "crypto/keys/revoked-carol.pub": "sha256:cb38138d9b2fcb4be87a62b1f1a756baf0c9e686a220a2ab4a91527c6b49dc39",
     "crypto/attestations/allowed_signers": "sha256:14e4171ee630a6737ba9a8bd5b1c99f2d6cc842ec1a7b5a0b2434c6f151b60e6",
-    "crypto/attestations/attestation-vectors.json": "sha256:acd8b406bfbd628d988fb57f4ff0476e9fc680fe947ecee242c186abe24e3bac",
+    "crypto/attestations/attestation-vectors.json": "sha256:fbcf55c3ea92fed00ba4c0a72fd640ce278a70b46994afeac5414993bf72e335",
     "crypto/attestations/envelopes/review-valid.dsse.json": "sha256:04bdee6cc779a8d9be8c972a4897bd6f15d61aaf0c6718ec6433e1d2bc5e673f",
     "crypto/attestations/envelopes/release-valid.dsse.json": "sha256:5b4b4b8c72506bcc98b72d4290a7dc23bf25d0f4c4596f715432785fcaede6a3",
     "crypto/attestations/envelopes/release-schema-invalid.dsse.json": "sha256:0846f091f0e341f06865f95afef433e8b65718683c87ac1e5ae2092f2a4da0e2",

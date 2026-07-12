@@ -107,7 +107,7 @@ func reviewFacts(stmt attest.Statement, authorIdentity string) (*trust.ReviewFac
 	return &trust.ReviewFacts{
 		Reviewer:          class,
 		ReviewerIdentity:  reviewer.Identity,
-		AuthorIdentity:    authorIdentity,
+		SignerIdentity:    authorIdentity,
 		SeparateContext:   separate,
 		SignedAttestation: true,
 	}, nil

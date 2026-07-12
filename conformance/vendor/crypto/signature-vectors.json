@@ -1,6 +1,6 @@
 {
   "$comment": "SPDX-License-Identifier: Apache-2.0",
-  "spec_version": "0.2",
+  "spec_version": "0.3",
   "description": "SSH commit-signature verification vectors for SemVer-Trust (spec/semver-trust.md §4.2, §5.2, §10 step 3; docs/conformance-crypto-fixtures.md). Fixture repositories are built by build-fixture-repos.sh (deterministic: pinned epoch, sha1 object format, deterministic Ed25519 signatures); commits are addressed by role tag AND pinned SHA — a SHA mismatch means the fixture build recipe drifted (expected <sha> for role <label>, got another; the recipe or its inputs changed), not that verification is wrong. The verifier consumes keys/allowed_signers as injected trust material and verifies at the pinned verification_time (ADR-018); every 'verification_failed' expectation is an abort — unverifiable is never T0 (§5.2).",
   "verification_time": "2026-01-01T00:00:00Z",
   "allowed_signers": "allowed_signers",

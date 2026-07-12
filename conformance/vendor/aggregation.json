@@ -1,6 +1,6 @@
 {
   "$comment": "SPDX-License-Identifier: Apache-2.0",
-  "spec_version": "0.2",
+  "spec_version": "0.3",
   "description": "Aggregation vectors for SemVer-Trust (spec/semver-trust.md §5.1, §5.2, §5.4, with §4.4 derivation re-leveling as it feeds §5.2). 'scope_partition' vectors map commit diff paths through a policy scope-glob map and assert which commits touch which scopes; 'scope_floor' vectors additionally carry per-commit levels and assert the per-scope own-trust floor; 'meta_path' vectors assert the §5.4 hard-fail rule for under-leveled commits touching meta-paths. Globs use gitignore-style segments: '*' matches within a path segment, '**' matches across segments.",
   "vectors": [
     {

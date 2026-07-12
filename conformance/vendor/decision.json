@@ -1,6 +1,6 @@
 {
   "$comment": "SPDX-License-Identifier: Apache-2.0",
-  "spec_version": "0.2",
+  "spec_version": "0.3",
   "description": "Release-decision vectors for SemVer-Trust (spec/semver-trust.md §6.1-§6.4, §7.1, Appendix A), encoding the §6.4 default decision table (the illustrative policy; tuned tables are out of scope). Inputs: effective trust, qualitative blast score, strategy, differ availability, the §6.1 semantic floor, the claimed bump, the previous release tag, and the trust-suffix iteration for this cut. Expected: the channel, the final bump (max of claim and semantic floor — the floor is honored unconditionally), and the exact §7.1 tag. 'Differ proof required' cells resolve to pre-release when no differ is available (§1.1 honest degradation); the requirement is qualified to PATCH claims where the table says so, and unqualified on the T1/low cell. Under 'inflate', vectors assert whether the bump escalates ('escalate'); the escalation target (MINOR vs MAJOR) is a policy choice per §6.3, so escalated vectors carry null bump/version.",
   "vectors": [
     {
