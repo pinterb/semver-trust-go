@@ -1,0 +1,8 @@
+# Attestation-signer registry (ADR-022): identities authorized to sign
+# review/release attestations, scoped to the attestation namespace —
+# deliberately separate from commit-signing enrollment (least privilege).
+#
+# MANUAL (maintainer): generate a dedicated SSH key and enroll it here:
+#   ssh-keygen -t ed25519 -f ~/.ssh/semver-trust-attest -N '' \
+#     -C 'semver-trust attestation signing'
+#   echo "brad.pinter@gmail.com namespaces=\"attestation@semver-trust.dev\" $(cut -d' ' -f1,2 ~/.ssh/semver-trust-attest.pub)" >> .semver-trust/attestation_signers

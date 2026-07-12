@@ -24,6 +24,12 @@ required_level = "T2"
 [identity.human]
 allowed_signers = ".semver-trust/allowed_signers"
 
+# GitHub's web-flow key signs web-UI merge commits (the pre-ADR-023 era);
+# classifying it as a machine identity keeps those merges honestly
+# agent-class. Its public key ships in .semver-trust/gpg-keyring.asc.
+[identity.agent]
+bot_accounts = ["noreply@github.com"]
+
 [trailers]
 require = true
 
