@@ -36,17 +36,17 @@ type Options struct {
 	// registry. Empty resolves the policy's identity.human.allowed_signers path
 	// from TO's tree.
 	AllowedSignersPath string
-	// AttestationSignersPath is a filesystem path to the attestation-signer
-	// registry. Empty means review attestations cannot be verified: reviews
-	// classify none (honest degradation, §4.3) — but a stored attestation that
-	// fails verification still aborts.
+	// AttestationSignersPath is a filesystem override for the attestation-signer
+	// registry. Empty resolves the policy's [identity] attestation_signers path
+	// from TO's tree (§9, ADR-022); if the policy declares none either, review
+	// attestations cannot be verified and classify none (honest degradation,
+	// §4.3) — but a stored attestation that fails verification still aborts.
 	AttestationSignersPath string
-	// GPGKeyringPath is a filesystem path to an armored OpenPGP public
-	// keyring (the CLI --gpg-keyring). Empty means the GPG key family is not
-	// verifiable and PGP-signed commits abort as unsupported (fail closed,
-	// fixture plan §2.1). Flag-only for now: the §9 policy vocabulary has no
-	// identity.human field for a GPG keyring — adding one is a spec-repo
-	// question, so no in-tree resolution happens here.
+	// GPGKeyringPath is a filesystem override for the armored OpenPGP public
+	// keyring (the CLI --gpg-keyring). Empty resolves the policy's
+	// [identity.human] gpg_keyring path from TO's tree (§9); if the policy
+	// declares none either, the GPG key family is not verifiable and PGP-signed
+	// commits abort as unsupported (fail closed, fixture plan §2.1).
 	GPGKeyringPath string
 	// Component selects which workspace component to headline in propagation
 	// output; empty is the single/root component.
@@ -126,7 +126,7 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 		Adapter:   pol.GraphAdapter,
 	}
 
-	keyring, err := resolvePGPKeyring(opts.GPGKeyringPath)
+	keyring, err := resolvePGPKeyring(opts, pol, repo)
 	if err != nil {
 		return nil, abort(stepLoadPolicy, err)
 	}
@@ -135,7 +135,7 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 		return nil, abort(stepLoadPolicy, err)
 	}
 	trusted := vcs.TrustedSigners{AllowedSigners: signers, PGPKeyring: keyring}
-	attVerifier, err := buildAttestationVerifier(opts.AttestationSignersPath)
+	attVerifier, err := buildAttestationVerifier(opts, pol, repo)
 	if err != nil {
 		return nil, abort(stepLoadPolicy, err)
 	}
@@ -306,15 +306,29 @@ func resolveHumanSigners(opts Options, pol *policy.Policy, repo string, haveOthe
 	return vcs.ParseAllowedSigners(data)
 }
 
-// resolvePGPKeyring loads the injected OpenPGP public keyring, or nil when no
-// path was given — the GPG family then stays fail-closed unsupported.
-func resolvePGPKeyring(path string) (*vcs.PGPKeyring, error) {
-	if path == "" {
+// resolvePGPKeyring loads the OpenPGP public keyring: the --gpg-keyring
+// filesystem override when given, else the policy's [identity.human]
+// gpg_keyring path read from TO's tree (§9, §10 step 1), else nil — the GPG
+// family then stays fail-closed unsupported. The flag overrides the policy so
+// an operator can supply a keyring out-of-band without editing the root of
+// trust.
+func resolvePGPKeyring(opts Options, pol *policy.Policy, repo string) (*vcs.PGPKeyring, error) {
+	var data []byte
+	switch {
+	case opts.GPGKeyringPath != "":
+		var err error
+		data, err = readFile(opts.GPGKeyringPath)
+		if err != nil {
+			return nil, fmt.Errorf("gpg-keyring: %w", err)
+		}
+	case pol.Identity.Human.GPGKeyring != "":
+		var err error
+		data, err = readTreeFile(repo, opts.To, pol.Identity.Human.GPGKeyring)
+		if err != nil {
+			return nil, fmt.Errorf("gpg-keyring from tree (%s): %w", pol.Identity.Human.GPGKeyring, err)
+		}
+	default:
 		return nil, nil
-	}
-	data, err := readFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("gpg-keyring: %w", err)
 	}
 	keyring, err := vcs.ParsePGPKeyring(data)
 	if err != nil {
@@ -324,15 +338,28 @@ func resolvePGPKeyring(path string) (*vcs.PGPKeyring, error) {
 }
 
 // buildAttestationVerifier constructs the review-attestation verifier from the
-// injected attestation-signer registry and the vendored predicate schemas, or
-// returns nil when no registry was given (reviews then classify none, §4.3).
-func buildAttestationVerifier(signersPath string) (*attest.Verifier, error) {
-	if signersPath == "" {
+// attestation-signer registry — the --attestation-signers filesystem override
+// when given, else the policy's [identity] attestation_signers path read from
+// TO's tree (§9, ADR-022, §10 step 1) — and the vendored predicate schemas, or
+// returns nil when neither source names one (reviews then classify none, §4.3).
+// The flag overrides the policy.
+func buildAttestationVerifier(opts Options, pol *policy.Policy, repo string) (*attest.Verifier, error) {
+	var data []byte
+	switch {
+	case opts.AttestationSignersPath != "":
+		var err error
+		data, err = readFile(opts.AttestationSignersPath)
+		if err != nil {
+			return nil, fmt.Errorf("attestation-signers: %w", err)
+		}
+	case pol.Identity.AttestationSigners != "":
+		var err error
+		data, err = readTreeFile(repo, opts.To, pol.Identity.AttestationSigners)
+		if err != nil {
+			return nil, fmt.Errorf("attestation-signers from tree (%s): %w", pol.Identity.AttestationSigners, err)
+		}
+	default:
 		return nil, nil
-	}
-	data, err := readFile(signersPath)
-	if err != nil {
-		return nil, fmt.Errorf("attestation-signers: %w", err)
 	}
 	// The allowed-signers format and its parsed type are shared across commit
 	// and attestation verification (internal/sshsig); the namespace column

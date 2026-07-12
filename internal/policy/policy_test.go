@@ -64,6 +64,7 @@ func TestParseSpecExample(t *testing.T) {
 		Identity: Identity{
 			Human: HumanIdentity{
 				AllowedSigners: ".semver-trust/allowed_signers",
+				GPGKeyring:     ".semver-trust/gpg-keyring.asc",
 				OIDCIssuers:    []string{"https://accounts.example.com"},
 			},
 			Agent: AgentIdentity{
@@ -71,6 +72,7 @@ func TestParseSpecExample(t *testing.T) {
 				SubjectPatterns: []string{"repo:acme/platform:*"},
 				BotAccounts:     []string{"release-bot@acme.dev"},
 			},
+			AttestationSigners: ".semver-trust/attestation_signers",
 		},
 		TrailersRequired: true,
 		GraphAdapter:     AdapterGomod,
@@ -179,6 +181,24 @@ func TestParseRejects(t *testing.T) {
 				return strings.Replace(s, "[policy]", "[policy]\nadoption_boundary = \"\"", 1)
 			},
 			wantSub: "adoption_boundary must be a non-empty revision",
+		},
+		{
+			name: "empty gpg_keyring",
+			mutate: func(s string) string {
+				return strings.Replace(s,
+					`gpg_keyring     = ".semver-trust/gpg-keyring.asc"   # armored OpenPGP public keyring (optional)`,
+					`gpg_keyring     = ""`, 1)
+			},
+			wantSub: "gpg_keyring must be a non-empty path",
+		},
+		{
+			name: "empty attestation_signers",
+			mutate: func(s string) string {
+				return strings.Replace(s,
+					`attestation_signers = ".semver-trust/attestation_signers"`,
+					`attestation_signers = ""`, 1)
+			},
+			wantSub: "attestation_signers must be a non-empty path",
 		},
 		{
 			name:    "unsupported policy version",
@@ -340,6 +360,64 @@ func TestAdoptionBoundary(t *testing.T) {
 	}
 	if strings.Contains(string(plainOut), "adoption_boundary") {
 		t.Errorf("Marshal emitted adoption_boundary for a policy that declares none:\n%s", plainOut)
+	}
+}
+
+// TestIdentityTrustMaterialKeys covers the two §9 identity trust-material
+// paths (ADR-022): [identity.human] gpg_keyring and [identity]
+// attestation_signers load onto the policy and survive a Marshal round-trip;
+// a policy that declares neither emits neither key (so a verifier sees "no
+// default", not an empty-string path).
+func TestIdentityTrustMaterialKeys(t *testing.T) {
+	p, err := Parse(loadSpecExample(t))
+	if err != nil {
+		t.Fatalf("Parse(spec §9 example): %v", err)
+	}
+	if p.Identity.Human.GPGKeyring != ".semver-trust/gpg-keyring.asc" {
+		t.Errorf("GPGKeyring = %q, want .semver-trust/gpg-keyring.asc", p.Identity.Human.GPGKeyring)
+	}
+	if p.Identity.AttestationSigners != ".semver-trust/attestation_signers" {
+		t.Errorf("AttestationSigners = %q, want .semver-trust/attestation_signers", p.Identity.AttestationSigners)
+	}
+
+	out, err := p.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	p2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse(Marshal(p)): %v\nmarshalled:\n%s", err, out)
+	}
+	p.Digest, p2.Digest = "", ""
+	if !reflect.DeepEqual(p, p2) {
+		t.Errorf("round-trip mismatch:\nfirst  %+v\nsecond %+v\nmarshalled:\n%s", p, p2, out)
+	}
+
+	// A policy declaring neither key emits neither: absent stays absent, so a
+	// verifier defaulting from the policy correctly sees no path (not "").
+	minimal := `
+[policy]
+version   = "0.1"
+threshold = "T2"
+strategy  = "demote"
+
+[meta]
+paths          = [".semver-trust/**"]
+required_level = "T3"
+`
+	plain, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatalf("Parse(minimal): %v", err)
+	}
+	if plain.Identity.Human.GPGKeyring != "" || plain.Identity.AttestationSigners != "" {
+		t.Errorf("undeclared identity keys not empty: %+v", plain.Identity)
+	}
+	plainOut, err := plain.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal(minimal): %v", err)
+	}
+	if strings.Contains(string(plainOut), "gpg_keyring") || strings.Contains(string(plainOut), "attestation_signers") {
+		t.Errorf("Marshal emitted an identity trust-material key for a policy that declares none:\n%s", plainOut)
 	}
 }
 

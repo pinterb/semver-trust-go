@@ -34,6 +34,21 @@ func (p *Policy) Marshal() ([]byte, error) {
 		header.AdoptionBoundary = &p.AdoptionBoundary
 	}
 
+	human := rawHumanIdentity{
+		AllowedSigners: p.Identity.Human.AllowedSigners,
+		OIDCIssuers:    p.Identity.Human.OIDCIssuers,
+	}
+	if p.Identity.Human.GPGKeyring != "" {
+		human.GPGKeyring = &p.Identity.Human.GPGKeyring
+	}
+	identity := rawIdentity{
+		Human: human,
+		Agent: rawAgentIdentity(p.Identity.Agent),
+	}
+	if p.Identity.AttestationSigners != "" {
+		identity.AttestationSigners = &p.Identity.AttestationSigners
+	}
+
 	raw := rawPolicy{
 		Policy: header,
 		Scopes: scopes,
@@ -41,10 +56,7 @@ func (p *Policy) Marshal() ([]byte, error) {
 			Paths:         p.Meta.Paths,
 			RequiredLevel: p.Meta.RequiredLevel.String(),
 		},
-		Identity: rawIdentity{
-			Human: rawHumanIdentity(p.Identity.Human),
-			Agent: rawAgentIdentity(p.Identity.Agent),
-		},
+		Identity: identity,
 		Trailers: rawTrailers{Require: p.TrailersRequired},
 		Graph:    rawGraph{Adapter: p.GraphAdapter},
 		Evidence: map[string]rawEvidence{},

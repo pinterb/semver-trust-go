@@ -12,9 +12,14 @@
 // adapter, policy version) reject anything outside their §9 vocabulary for
 // the same reason: unknown values mean unknown semantics.
 //
-// One key extends the §9 vocabulary by decision record rather than spec
-// text: [policy] adoption_boundary (ADR-024, spec §9 mirror queued for the
-// v0.3 pass). It is policy-pinned on purpose — see Policy.AdoptionBoundary.
+// Three keys are optional and absent by default (spec §9, adopted in the
+// v0.3 pass): [policy] adoption_boundary (ADR-024) is policy-pinned on
+// purpose — see Policy.AdoptionBoundary; [identity.human] gpg_keyring and
+// [identity] attestation_signers (ADR-022) name in-tree trust-material paths
+// that the verifier MAY default its --gpg-keyring / --attestation-signers
+// from when those flags are absent (an explicit flag overrides). Declared
+// but empty, any of the three is a rejected declaration, not a no-op: an
+// empty path in the root of trust is a typo, never a silent "none".
 //
 // Parse also records the SHA-256 digest of the raw policy bytes, the value
 // the verification algorithm pins in the release attestation (§8.1

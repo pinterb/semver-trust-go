@@ -93,9 +93,9 @@ type Policy struct {
 	// level — and the §8.1 attestation's pinned policy digest freezes which
 	// boundary produced each decision.
 	//
-	// Vocabulary note: this field is recorded in ADR-024; the spec §9 mirror
-	// is queued for the v0.3 pass (the ADR-015 pattern: decision now, spec
-	// text at the next version). Empty means no boundary is declared.
+	// Vocabulary note: this field is recorded in ADR-024 and mirrored in the
+	// spec §9 reference example as of the v0.3 pass. Empty means no boundary
+	// is declared.
 	AdoptionBoundary string
 
 	// Scopes maps path globs to scope names (§5.1). Paths matching no glob
@@ -154,6 +154,16 @@ type Derivation struct {
 type Identity struct {
 	Human HumanIdentity
 	Agent AgentIdentity
+
+	// AttestationSigners is the optional in-tree path to the SSH
+	// allowed-signers registry of keys trusted to sign review and release
+	// attestations (SSHSIG over the DSSE PAE, §4.3, §8.2, ADR-022). It lives
+	// under [identity] rather than [identity.human] because an attestation
+	// signer may be any accountable class. A verifier MAY default its
+	// --attestation-signers from this path when the flag is absent, reading
+	// it from TO's tree (§9, §10 step 1); an explicit flag overrides. Empty
+	// means the policy declares none.
+	AttestationSigners string
 }
 
 // HumanIdentity configures verification of human identities.
@@ -162,6 +172,14 @@ type HumanIdentity struct {
 	AllowedSigners string
 	// OIDCIssuers are gitsign issuers whose identities map to people.
 	OIDCIssuers []string
+	// GPGKeyring is the optional in-tree path to an armored OpenPGP public
+	// keyring for GPG-signed commits — the OpenPGP counterpart to the SSH
+	// AllowedSigners registry (§9). A verifier MAY default its --gpg-keyring
+	// from this path when the flag is absent, reading it from TO's tree (§10
+	// step 1); an explicit flag overrides. Empty means the policy declares
+	// none, and the GPG key family stays fail-closed unless a keyring is
+	// injected out-of-band.
+	GPGKeyring string
 }
 
 // AgentIdentity configures verification of machine identities.

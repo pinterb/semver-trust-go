@@ -21,8 +21,18 @@ paths = [
 ]
 required_level = "T2"
 
+# attestation_signers registers the keys trusted to sign review/release
+# attestations (§9, ADR-022); declaring it here lets verify default
+# --attestation-signers from this tree, so this repo verifies flag-free.
+[identity]
+attestation_signers = ".semver-trust/attestation_signers"
+
+# gpg_keyring is the OpenPGP counterpart to allowed_signers (§9): the armored
+# keyring for GPG-signed commits, so verify defaults --gpg-keyring from the
+# tree. It also holds GitHub's web-flow key (below).
 [identity.human]
 allowed_signers = ".semver-trust/allowed_signers"
+gpg_keyring     = ".semver-trust/gpg-keyring.asc"
 
 # GitHub's web-flow key signs web-UI merge commits (the pre-ADR-023 era);
 # classifying it as a machine identity keeps those merges honestly

@@ -15,6 +15,13 @@ Principle 2); everything else is scripted or already committed.
   maintainer's public keys plus GitHub's web-flow key, which signs web-UI merge
   commits), `allowed_signers`, and `attestation_signers`. Verification injects
   these; nothing is fetched from the network at verify time.
+- **The policy names its own trust material** (spec §9): `[identity.human]`
+  declares `allowed_signers` and `gpg_keyring`, and `[identity]` declares
+  `attestation_signers`. `verify`, `release`, and `promote` default those paths
+  from the target commit's tree, so the commands below need no `--gpg-keyring` /
+  `--attestation-signers` / `--allowed-signers` flags. The flags still exist and
+  **override** the policy when you must supply material out-of-band (e.g. a key
+  not yet committed).
 - **The clock is injected, and it matters.** The maintainer's 2026-07 temporary
   key expires **2026-08-01**, so any verification instant for history signed by
   it must predate the expiry. Do not use the wall clock for reproduction: the
@@ -67,8 +74,6 @@ already-pushed attestations.
 
 ```sh
 semver-trust verify --repo . --from "$FROM" --to "$TO" \
-  --gpg-keyring .semver-trust/gpg-keyring.asc \
-  --attestation-signers .semver-trust/attestation_signers \
   --verify-time <RFC3339, before 2026-08-01>
 ```
 
@@ -82,8 +87,6 @@ semver-trust release \
   --repo . --from "$FROM" --to "$TO" \
   --claimed-bump <patch|minor|major> \
   --blast <low|moderate|high — your judgment, recorded as operator-supplied> \
-  --gpg-keyring .semver-trust/gpg-keyring.asc \
-  --attestation-signers .semver-trust/attestation_signers \
   --tag-key ~/.ssh/semver-trust-attest --attest-key ~/.ssh/semver-trust-attest \
   --verify-time <RFC3339, before 2026-08-01>
 ```
@@ -114,8 +117,6 @@ refs and re-run.
 git clone https://github.com/semver-trust/semver-trust-go /tmp/fresh && cd /tmp/fresh
 git fetch origin 'refs/attestations/*:refs/attestations/*'
 go run ./cmd/semver-trust verify --repo . --from "$FROM" --to <the tag> \
-  --gpg-keyring .semver-trust/gpg-keyring.asc \
-  --attestation-signers .semver-trust/attestation_signers \
   --verify-time <the attestation's recorded timestamp>
 ```
 

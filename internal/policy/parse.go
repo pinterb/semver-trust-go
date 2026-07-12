@@ -57,11 +57,20 @@ type rawDerivation struct {
 type rawIdentity struct {
 	Human rawHumanIdentity `toml:"human"`
 	Agent rawAgentIdentity `toml:"agent"`
+	// AttestationSigners is a pointer for the same reason as AdoptionBoundary:
+	// `attestation_signers = ""` is a rejected declaration, not an absent one
+	// (§9, ADR-022). It sits under [identity], not [identity.human] — review
+	// and release attestations may be signed by any accountable class.
+	AttestationSigners *string `toml:"attestation_signers,omitempty"`
 }
 
 type rawHumanIdentity struct {
 	AllowedSigners string   `toml:"allowed_signers"`
 	OIDCIssuers    []string `toml:"oidc_issuers"`
+	// GPGKeyring is a pointer so a declared-but-empty keyring path is
+	// distinguishable from an absent one and rejected (§9, the OpenPGP
+	// counterpart to the SSH allowed_signers registry).
+	GPGKeyring *string `toml:"gpg_keyring,omitempty"`
 }
 
 type rawAgentIdentity struct {
@@ -130,9 +139,8 @@ func Parse(data []byte) (*Policy, error) {
 		return nil, err
 	}
 
-	p.Identity = Identity{
-		Human: HumanIdentity(raw.Identity.Human),
-		Agent: AgentIdentity(raw.Identity.Agent),
+	if err := parseIdentity(raw.Identity, p); err != nil {
+		return nil, err
 	}
 	p.TrailersRequired = raw.Trailers.Require
 	for name, r := range raw.Registry {
@@ -171,6 +179,35 @@ func parseHeader(h *rawHeader, p *Policy) error {
 		}
 		p.AdoptionBoundary = *h.AdoptionBoundary
 	}
+	return nil
+}
+
+// parseIdentity copies the §9 identity map onto the policy, validating the two
+// optional trust-material paths. Both follow the adoption_boundary rule: a
+// declared-but-empty path is a rejected declaration, not a no-op — an empty
+// gpg_keyring or attestation_signers is a typo in the root of trust, never a
+// silent "no keyring".
+func parseIdentity(raw rawIdentity, p *Policy) error {
+	human := HumanIdentity{
+		AllowedSigners: raw.Human.AllowedSigners,
+		OIDCIssuers:    raw.Human.OIDCIssuers,
+	}
+	if raw.Human.GPGKeyring != nil {
+		if *raw.Human.GPGKeyring == "" {
+			return fmt.Errorf("policy: identity.human gpg_keyring must be a non-empty path when declared (§9)")
+		}
+		human.GPGKeyring = *raw.Human.GPGKeyring
+	}
+
+	id := Identity{Human: human, Agent: AgentIdentity(raw.Agent)}
+	if raw.AttestationSigners != nil {
+		if *raw.AttestationSigners == "" {
+			return fmt.Errorf("policy: identity attestation_signers must be a non-empty path when declared (§9, ADR-022)")
+		}
+		id.AttestationSigners = *raw.AttestationSigners
+	}
+
+	p.Identity = id
 	return nil
 }
 

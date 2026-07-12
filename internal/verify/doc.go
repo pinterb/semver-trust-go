@@ -38,6 +38,21 @@
 // (ADR-008). ADR-008's unverifiable-⇒-abort posture holds unchanged inside
 // the verified region.
 //
+// # Trust-material resolution and precedence (§9)
+//
+// Three trust-material inputs — the human allowed-signers registry, the GPG
+// keyring, and the attestation-signer registry — each resolve the same way: an
+// explicit Options path (the CLI flag) wins; otherwise the corresponding §9
+// policy field is read from TO's tree ([identity.human] allowed_signers and
+// gpg_keyring, [identity] attestation_signers, ADR-022); otherwise the input is
+// absent. Reading the default from TO's tree (never the working tree) keeps the
+// policy the root of trust: the same commit that pins the policy also pins
+// where its trust material lives, and a dirty checkout cannot change either.
+// Absence degrades honestly per family — no allowed-signers and no keyring
+// aborts (no trust material at all); no attestation registry classifies reviews
+// none; no keyring leaves the GPG family fail-closed — while a declared-but-
+// unreadable path always aborts.
+//
 // # A sequencing note on the §5.4 meta-path check
 //
 // §10 step 1 says to verify the policy file's own history within FROM..TO
