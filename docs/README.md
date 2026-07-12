@@ -13,7 +13,7 @@ plain language.
 | You are a coding agent authoring commits in such a repository | [guides/agent.md](guides/agent.md) |
 | You're starting a new GitHub repository under the scheme | [guides/bootstrap-github.md](guides/bootstrap-github.md) |
 | You're adopting the scheme on an existing GitHub repository | [guides/adopt-legacy-github.md](guides/adopt-legacy-github.md) |
-| *The GitLab guide lands with the final PR of this docs set.* | |
+| You're on GitLab | [guides/gitlab.md](guides/gitlab.md) |
 
 ## Reference
 
