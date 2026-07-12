@@ -9,7 +9,9 @@ plain language.
 
 | Your situation | Read |
 |---|---|
-| *Persona guides land here as they merge — contributor, agent, new-repo bootstrap, legacy adoption, GitLab.* | |
+| You contribute code to a repository that uses SemVer-Trust | [guides/contributor.md](guides/contributor.md) |
+| You are a coding agent authoring commits in such a repository | [guides/agent.md](guides/agent.md) |
+| *Remaining guides land as they merge — new-repo bootstrap, legacy adoption, GitLab.* | |
 
 ## Reference
 

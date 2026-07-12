@@ -125,8 +125,8 @@ Provenance: human
 ```
 
 **The agent never relies on the template.** An agent MUST write its complete
-trailer block into every commit message it authors (see the agent
-guide, forthcoming in this docs set). This repository instructs its agents to do
+trailer block into every commit message it authors (see the
+[agent contract](../guides/agent.md)). This repository instructs its agents to do
 exactly that in `AGENTS.md`; the agent harness composes the message, so the
 human default in the template is never in play for agent commits.
 
@@ -190,5 +190,8 @@ classification prices in whatever it finds there.
 
 ## See also
 
+- [Working in a repository that uses SemVer-Trust](../guides/contributor.md) —
+  the human's day-to-day flow.
+- [Agent contract](../guides/agent.md) — the rules an agent must follow.
 - [Trust material](trust-material.md) — how signing keys get enrolled.
 - [Reading verify output](verify-output.md) — where a bad trailer shows up.

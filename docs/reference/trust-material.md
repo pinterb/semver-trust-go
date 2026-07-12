@@ -108,7 +108,7 @@ verification means.
 The flow for a new contributor:
 
 1. Contributor generates a signing key and configures git to sign with it
-   (see the contributor guide, forthcoming).
+   (see the [contributor guide](../guides/contributor.md)).
 2. Contributor opens a PR adding one line to `.semver-trust/allowed_signers`
    with their principal and public key.
 3. A maintainer reviews the line against out-of-band knowledge of the person

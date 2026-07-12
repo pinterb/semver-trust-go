@@ -7,7 +7,9 @@ this file is canonical.
 The specification
 repository (`github.com/semver-trust/spec`) is normative; its design
 record (`docs/design-record.md`) §9 handoff contract is incorporated by
-reference. This file adds the rules specific to writing code here.
+reference. Generic agent conduct for any SemVer-Trust repository is
+documented in [docs/guides/agent.md](docs/guides/agent.md); this file
+adds this repository's rules and wins where stricter.
 
 ## Sequencing gates (hard rules)
 

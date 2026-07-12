@@ -28,13 +28,14 @@ Notes:
 - The template pre-seeds `git commit` (editor flow). `git commit -m` bypasses
   templates — if you use `-m`, add the trailer yourself, e.g.
   `git commit -m "msg" --trailer "Provenance: human"`.
-- Trailer semantics are defined by spec §4.1 and are tool-agnostic:
-  human-authored commits use `Provenance: human`; agent-authored commits use
-  `Provenance: agent` plus `Provenance-Agent: <tool>/<version>` for whatever
-  agent produced the change (Claude Code, Codex, Cursor, aider, …); mixed
-  authorship uses `Provenance: mixed`.
+- The general form — trailer grammar, the human/agent split on one machine,
+  the enforcing hook — is documented in
+  [docs/reference/trailers.md](docs/reference/trailers.md); the day-to-day
+  contributor flow in any SemVer-Trust repository (this one included) is
+  [docs/guides/contributor.md](docs/guides/contributor.md).
 - Coding agents must follow `AGENTS.md` (the canonical agent contract;
-  `CLAUDE.md` is a pointer to it for tools that only read that file).
+  `CLAUDE.md` is a pointer to it for tools that only read that file), layered
+  on the generic [agent contract](docs/guides/agent.md).
 - Unsigned or untrailered commits cannot be merged regardless of content.
 
 ## Development environment
