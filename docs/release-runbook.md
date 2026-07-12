@@ -10,18 +10,12 @@ Principle 2); everything else is scripted or already committed.
 
 ## Standing notes
 
-- **Trust material is committed** under `.semver-trust/`: `policy.toml`
-  (threshold T2, strategy `demote`, meta-paths at T2), `gpg-keyring.asc` (the
-  maintainer's public keys plus GitHub's web-flow key, which signs web-UI merge
-  commits), `allowed_signers`, and `attestation_signers`. Verification injects
-  these; nothing is fetched from the network at verify time.
-- **The policy names its own trust material** (spec §9): `[identity.human]`
-  declares `allowed_signers` and `gpg_keyring`, and `[identity]` declares
-  `attestation_signers`. `verify`, `release`, and `promote` default those paths
-  from the target commit's tree, so the commands below need no `--gpg-keyring` /
-  `--attestation-signers` / `--allowed-signers` flags. The flags still exist and
-  **override** the policy when you must supply material out-of-band (e.g. a key
-  not yet committed).
+- **Trust material is committed** under `.semver-trust/` and the policy names
+  its own material (spec §9), so the commands below run flag-free against the
+  target commit's tree; an explicit flag still overrides for out-of-band
+  material. Formats and semantics:
+  [reference/trust-material.md](reference/trust-material.md) and
+  [reference/policy.md](reference/policy.md).
 - **The clock is injected, and it matters.** The maintainer's 2026-07 temporary
   key expires **2026-08-01**, so any verification instant for history signed by
   it must predate the expiry. Do not use the wall clock for reproduction: the
@@ -126,10 +120,18 @@ the claim the whole project exists to make good on; run it every release.
 ## Promotion
 
 Promotion moves a release from the pre-release channel to the clean channel
-**without changing its source** (§7.3): new evidence is attested against the
-same commit SHA, the decision is recomputed, and if it now qualifies the clean
-tag is cut on the identical SHA with a superseding attestation. The dedicated
-`semver-trust promote` command is the sanctioned path once available; until then
-the manual route is a fresh `attest review` supplying the new evidence followed
-by a `release` re-run at the same `$TO`, whose attestation records the prior
-envelope as superseded.
+**without changing its source** (§7.3): attest the new evidence (a fresh
+`attest review` over the release range, pushed as in step 3), then let
+`promote` re-decide the same SHA:
+
+```sh
+semver-trust promote --repo . --tag <the pre-release tag> \
+  --tag-key ~/.ssh/semver-trust-attest --attest-key ~/.ssh/semver-trust-attest \
+  --verify-time <RFC3339, before 2026-08-01>
+git push upstream 'refs/tags/<the clean tag>' 'refs/attestations/*:refs/attestations/*'
+```
+
+If the evidence has not changed the decision, `promote` refuses — promotion is
+never a re-cut. The clean tag lands on the identical commit, and the new
+attestation records the superseded envelope (§8.1); see
+[reference/attestation-refs.md](reference/attestation-refs.md).

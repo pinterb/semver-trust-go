@@ -180,7 +180,7 @@ require = true
 adapter = "none"
 ```
 
-The bootstrap guide (forthcoming in this docs set) walks this file into a
+The [bootstrap guide](../guides/bootstrap-github.md) walks this file into a
 verified first release.
 
 ## See also
