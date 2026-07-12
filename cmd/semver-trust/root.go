@@ -25,7 +25,10 @@ release against a repository policy (spec §10).
 
 Available now: verify (GO-040) — walk a release range and report per-commit
 provenance and effective trust; release (GO-042) — decide channel and version
-and emit the signed tag plus the release attestation (§10 steps 8-9); attest
+and emit the signed tag plus the release attestation (§10 steps 8-9); promote
+(GO-043) — re-decide a pre-release at its own SHA with new evidence and, if it
+now qualifies, cut the clean tag on the identical commit with a superseding
+attestation (§7.3); attest
 review — emit a signed §4.3 review attestation over commits; policy
 validate/explain and the zero-configuration plain-mode tag commands list,
 latest, next, and tag (GO-041).`,
@@ -39,6 +42,7 @@ latest, next, and tag (GO-041).`,
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newVerifyCmd())
 	root.AddCommand(newReleaseCmd())
+	root.AddCommand(newPromoteCmd())
 	root.AddCommand(newAttestCmd())
 	root.AddCommand(newPolicyCmd())
 	root.AddCommand(newListCmd())
