@@ -56,19 +56,19 @@ sboms:
 
 # Keyless cosign signing over the checksums file (id-token: write in CI). This
 # is the standard minimal pattern: the signed checksums file transitively
-# covers every archive listed inside it.
+# covers every archive listed inside it. cosign v4 emits a single sigstore
+# bundle (signature + certificate + transparency-log proof in one file); the
+# pre-v4 --output-signature/--output-certificate flags are deprecated no-ops.
 signs:
   - id: cosign-checksum
     cmd: cosign
     args:
       - sign-blob
       - --yes
-      - --output-certificate=${certificate}
-      - --output-signature=${signature}
+      - --bundle=${signature}
       - ${artifact}
     artifacts: checksum
-    certificate: "${artifact}.pem"
-    signature: "${artifact}.sig"
+    signature: "${artifact}.sigstore.json"
 
 changelog:
   use: github

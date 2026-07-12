@@ -40,13 +40,12 @@ go install github.com/semver-trust/semver-trust-go/cmd/semver-trust@latest
 Prebuilt binaries for Linux, macOS, and Windows (amd64/arm64) are attached to
 each [GitHub Release](https://github.com/semver-trust/semver-trust-go/releases),
 alongside a `checksums.txt`, a keyless [cosign](https://docs.sigstore.dev/)
-signature over the checksums, and per-archive SBOMs. Verify the checksums
-before trusting a binary:
+signature bundle over the checksums, and per-archive SBOMs. Verify the
+checksums before trusting a binary:
 
 ```sh
 cosign verify-blob \
-  --certificate checksums.txt.pem \
-  --signature checksums.txt.sig \
+  --bundle checksums.txt.sigstore.json \
   --certificate-identity-regexp 'https://github.com/semver-trust/semver-trust-go/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   checksums.txt
