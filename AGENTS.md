@@ -44,10 +44,17 @@ reference. This file adds the rules specific to writing code here.
 
 ## Layout and conventions
 
-- `cmd/semver-trust/` — CLI entrypoint (`verify`, `release`, `policy`).
-- `internal/` — everything not part of the public plugin API.
-- Public packages only for the ADR-011 seams: evidence providers,
-  workspace graph adapters, registry projections.
+- `cmd/semver-trust/` — CLI entrypoint (`verify`, `release`, `attest`,
+  `policy`, the plain-mode `list`/`latest`/`next`/`tag`).
+- `internal/` — everything not part of the public plugin API:
+  `version`/`plain` (parsers + plain mode), `vcs`, `sshsig`/`pgp` (signing
+  key families), `trust`, `policy`, `attest`, `derive`, and `verify` (the
+  §10 pipeline).
+- Public packages only for the ADR-011 seams: `evidence/` (compatibility
+  providers) and `graph/` (workspace graph adapters), plus registry
+  projections.
+- `conformance/` — the vendored, digest-pinned spec vectors and manifest
+  (ADR-021); never hand-edited (refresh via `scripts/sync-conformance.py`).
 - Tests run via `gotestsum` with agent-readable output formatting
   (maintainer convention); table-driven tests; fixture repositories are
   constructed by scripts, never committed as opaque `.git` blobs.
