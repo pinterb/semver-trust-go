@@ -125,6 +125,12 @@ jobs:
       - name: Install syft (SBOM generation)
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
 
+      - name: Keep the worktree VCS-clean for version stamping
+        # Tags cut before .gitignore knew dist/ would otherwise stamp the
+        # binaries' Main.Version as "+dirty" once goreleaser writes its
+        # output directory into the worktree.
+        run: echo 'dist/' >>.git/info/exclude
+
       - name: Stage GoReleaser config (pre-config tags lack .goreleaser.yaml)
         run: |
           set -euo pipefail

@@ -97,6 +97,9 @@ release:
     owner: semver-trust
     name: semver-trust-go
   draft: false
+  # A re-run against an existing release (retro-publication, retry after a
+  # partial failure) replaces its assets instead of erroring on duplicates.
+  replace_existing_artifacts: true
 
 snapshot:
   version_template: "{{ .Tag }}-next"
