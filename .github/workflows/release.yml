@@ -1,0 +1,161 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+#
+# Release pipeline (WS2b). Triggered by pushing a `v*` tag, or dispatched at an
+# existing tag ref (so v0.1.0 can be published retroactively). Three jobs:
+#
+#   verify     — the dogfood gate (enforced, blocking): re-run spec §10
+#                steps 1-7 over root..TAG at the tag's RECORDED attestation
+#                instant. The maintainer's temp GPG key expires 2026-08-01, so
+#                the wall clock must NOT be used; the timestamp comes from the
+#                release attestation stored under refs/attestations/<tag>/*.
+#   goreleaser — build + publish archives, checksums, SBOMs, and keyless cosign
+#                signatures via .goreleaser.yaml (needs a green verify).
+#   badge      — compose the shields.io endpoint badge from verify's effective
+#                trust output and force-push it to the orphan `badges` branch.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# contents: write — create the GitHub Release and push the badges branch.
+# id-token: write — cosign keyless (Fulcio/Rekor OIDC) in the goreleaser job.
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  verify:
+    name: verify (enforced dogfood gate)
+    runs-on: ubuntu-latest
+    outputs:
+      effective: ${{ steps.verify.outputs.effective }}
+    steps:
+      - name: Checkout (full history — verify walks root..TAG)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Fetch release attestation refs
+        run: git fetch origin 'refs/attestations/*:refs/attestations/*'
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build semver-trust
+        run: go build -o semver-trust ./cmd/semver-trust
+
+      - name: Extract the tag's recorded attestation timestamp
+        id: ts
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ref=$(git for-each-ref "refs/attestations/${TAG}/*" --format='%(refname)' | head -1)
+          if [ -z "${ref}" ]; then
+            echo "::error::no release attestation ref under refs/attestations/${TAG}/ — run the release ceremony (docs/release-runbook.md) before publishing."
+            exit 1
+          fi
+          ts=$(git cat-file blob "$(git rev-parse "${ref}")" | \
+            python3 -c 'import json,base64,sys; e=json.load(sys.stdin); print(json.loads(base64.b64decode(e["payload"]))["predicate"]["timestamp"])')
+          echo "Using recorded attestation timestamp ${ts} (from ${ref})."
+          echo "timestamp=${ts}" >>"${GITHUB_OUTPUT}"
+
+      - name: Verify this release (spec §10 steps 1-7)
+        id: verify
+        env:
+          TAG: ${{ github.ref_name }}
+          TS: ${{ steps.ts.outputs.timestamp }}
+        run: |
+          set -euo pipefail
+          ./semver-trust verify \
+            --repo . \
+            --from '' \
+            --to "${TAG}" \
+            --gpg-keyring .semver-trust/gpg-keyring.asc \
+            --attestation-signers .semver-trust/attestation_signers \
+            --verify-time "${TS}" \
+            --json >verify-report.json
+          effective=$(jq -r '.propagation as $p
+            | (first($p.components[] | select(.name == $p.target)) // $p.components[0])
+            | .effective' verify-report.json)
+          echo "Verified at effective ${effective}."
+          echo "effective=${effective}" >>"${GITHUB_OUTPUT}"
+
+      - name: Upload verify report (for the badge job)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: verify-report
+          path: verify-report.json
+
+  goreleaser:
+    name: goreleaser (build + publish)
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history — changelog + VCS version stamp)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+
+      - name: Install syft (SBOM generation)
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94  # v7.2.3
+        with:
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  badge:
+    name: badge (publish to badges branch)
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - name: Compose badge.json
+        env:
+          EFFECTIVE: ${{ needs.verify.outputs.effective }}
+        run: |
+          set -euo pipefail
+          # Badge color orders accountability (ADR-019), not pass/fail:
+          # T3 green, T2 yellowgreen, T1 orange, T0 red.
+          case "${EFFECTIVE}" in
+            T3) color=green ;;
+            T2) color=yellowgreen ;;
+            T1) color=orange ;;
+            *) color=red ;;
+          esac
+          jq -n --arg message "${EFFECTIVE} ✓" --arg color "${color}" \
+            '{schemaVersion: 1, label: "SemVer-Trust", message: $message, color: $color}' \
+            >"${RUNNER_TEMP}/badge.json"
+
+      - name: Publish to the badges branch
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |-
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout --orphan badges
+          git rm -rf --quiet .
+          cp "${RUNNER_TEMP}/badge.json" badge.json
+          git add badge.json
+          git commit -m "badge: ${TAG}"
+          git push --force origin badges
