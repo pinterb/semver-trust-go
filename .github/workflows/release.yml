@@ -19,7 +19,15 @@ on:
   push:
     tags:
       - 'v*'
+  # workflow_dispatch reads this file from the DISPATCHED ref, and tags cut
+  # before this workflow existed have no copy of it — so retro-publication
+  # dispatches from main and names the tag as an input instead.
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to publish (e.g. v0.1.0)'
+        required: true
+        type: string
 
 # contents: write — create the GitHub Release and push the badges branch.
 # id-token: write — cosign keyless (Fulcio/Rekor OIDC) in the goreleaser job.
@@ -53,7 +61,7 @@ jobs:
       - name: Extract the tag's recorded attestation timestamp
         id: ts
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           ref=$(git for-each-ref "refs/attestations/${TAG}/*" --format='%(refname)' | head -1)
@@ -69,7 +77,7 @@ jobs:
       - name: Verify this release (spec §10 steps 1-7)
         id: verify
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
           TS: ${{ steps.ts.outputs.timestamp }}
         run: |
           set -euo pipefail
@@ -102,6 +110,9 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
           fetch-depth: 0
+          # On dispatch, build at the named tag; on tag push this is the
+          # pushed ref anyway.
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
@@ -148,7 +159,7 @@ jobs:
 
       - name: Publish to the badges branch
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |-
           set -euo pipefail
           git config user.name 'github-actions[bot]'
