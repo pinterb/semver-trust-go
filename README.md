@@ -7,8 +7,7 @@ The official Go reference implementation of the
 [![SemVer-Trust](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsemver-trust%2Fsemver-trust-go%2Fbadges%2Fbadge.json)](https://github.com/semver-trust/spec/blob/main/spec/semver-trust.md#3-trust-model)
 
 <!-- The badge reads the endpoint document on the `badges` branch, refreshed by
-the release workflow on each verified release. It goes live at the next
-published release; until then it renders "invalid". -->
+the release workflow on each verified release. -->
 
 semver-trust is a git-native tool that reads the provenance of every commit in
 a release range — signatures, `Provenance:` trailers, and review attestations —
