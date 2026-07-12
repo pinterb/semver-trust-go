@@ -16,13 +16,15 @@ A verification abort is reported as **unverifiable**, naming the failing
 spec §5.2). `informational: 'true'` only controls whether the *job* fails —
 the summary and badge always tell the truth.
 
-This repository itself currently has no `.semver-trust/policy.toml` and its
-pre-ADR-023 history contains web-flow merges, so its own verify honestly
-aborts at §10 step 1. The `self-verify` job in
-[`semver-trust-verify.yml`](../../workflows/semver-trust-verify.yml) runs
-informationally until D3/GO-061 land a policy; the `fixture-verify` job
+This repository verifies itself: `.semver-trust/` carries the committed
+policy and trust material, and every release is verified from the root
+commit (no adoption boundary — spec repository ADR-026). The `self-verify`
+job in [`semver-trust-verify.yml`](../../workflows/semver-trust-verify.yml)
+runs informationally on pull requests, because in-flight commits have not
+yet received the review attestations that lift them (that happens at the
+release ceremony); the enforced gates are the `fixture-verify` job, which
 proves the verified path end-to-end against the deterministic release
-fixture.
+fixture, and the release workflow's verify job, which blocks publication.
 
 ## Usage
 
@@ -106,7 +108,7 @@ A static sample endpoint document is committed next to this README as
 
 The sample is a *test fixture for the rendering path* (it shows the
 ADR-017 "SemVer-Trust: T2 ✓" shape); it is not a claim about this
-repository. Live badges come from the `badge.json` this action uploads as
-a workflow artifact — or, once this repo dogfoods its own releases
-(GO-061), from a published endpoint updated on each verified release, at
-which point the README badge switches to live.
+repository. This repository's own live badge is published to the `badges`
+branch by the release workflow on each verified release (the README badge
+reads it); in your repository, the `badge.json` this action uploads as a
+workflow artifact can feed the same pattern.

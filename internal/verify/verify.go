@@ -23,9 +23,9 @@ type Options struct {
 	// From is the previous release tag; empty means a first release
 	// (root..TO, §5.2, §10 step 2) — unless the policy declares an adoption
 	// boundary, in which case a first release anchors at boundary..TO
-	// (ADR-024). An explicit From always wins: ranges anchored at a previous
+	// (ADR-026). An explicit From always wins: ranges anchored at a previous
 	// verified tag are unaffected by the boundary. There is deliberately no
-	// boundary option here — the boundary is policy-pinned (ADR-024 rejects
+	// boundary option here — the boundary is policy-pinned (ADR-026 rejects
 	// CLI-supplied boundaries: whoever runs the verifier could move it).
 	From string
 	// To is the proposed release commit (revision), default "HEAD".
@@ -141,7 +141,7 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 	}
 
 	// ---- §10 step 2: enumerate commits (root..TO for a first release, ------
-	// boundary..TO under a policy-declared adoption boundary, ADR-024). ------
+	// boundary..TO under a policy-declared adoption boundary, ADR-026). ------
 	// Pre-boundary commits are outside the range and contribute nothing: no
 	// levels, no scopes — exempt history makes no claim (never T0, ADR-008).
 	// An explicit FROM makes the boundary irrelevant: ranges anchored at a
@@ -151,11 +151,11 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 		boundarySHA, err := commitHash(repo, pol.AdoptionBoundary)
 		if err != nil {
 			return nil, abort(stepEnumerate, fmt.Errorf(
-				"adoption boundary %q declared in policy ([policy] adoption_boundary, ADR-024) does not resolve: %w",
+				"adoption boundary %q declared in policy ([policy] adoption_boundary, ADR-026) does not resolve: %w",
 				pol.AdoptionBoundary, err))
 		}
 		from = pol.AdoptionBoundary
-		// Disclosure (ADR-024): "verified since the boundary" is a different
+		// Disclosure (ADR-026): "verified since the boundary" is a different
 		// claim from "verified since inception" and must never be conflated —
 		// the report marks the boundary in both renderings.
 		report.From = pol.AdoptionBoundary
@@ -167,7 +167,7 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 		if report.FromIsAdoptionBoundary {
 			// vcs.Range enforces FROM-is-an-ancestor-of-TO (§10.2); name the
 			// boundary's policy provenance so the abort is traceable.
-			err = fmt.Errorf("adoption boundary %q declared in policy ([policy] adoption_boundary, ADR-024): %w",
+			err = fmt.Errorf("adoption boundary %q declared in policy ([policy] adoption_boundary, ADR-026): %w",
 				pol.AdoptionBoundary, err)
 		}
 		return nil, abort(stepEnumerate, err)

@@ -227,7 +227,7 @@ func newTagCmd() *cobra.Command {
 		Use:   "tag [name]",
 		Short: "Create an annotated tag at HEAD: the given name or the computed next version",
 		Long: `tag creates an annotated tag at HEAD (zero configuration; unsigned — signed
-release tags are the release command's job, GO-042). With a name argument the
+release tags are the release command's job). With a name argument the
 tag is created verbatim after validation: §7.1-valid tags and the lenient
 plain forms the donor accepted are allowed; malformed trust shapes and other
 invalid names are refused (§7.1 fails closed). Without a name the next

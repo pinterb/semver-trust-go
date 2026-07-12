@@ -224,7 +224,7 @@ prints the would-be tag and attestation without writing anything.`,
 
 	f := cmd.Flags()
 	f.StringVar(&repoPath, "repo", ".", "repository to release from")
-	f.StringVar(&from, "from", "", "previous release tag; empty = first release (root..TO, or boundary..TO under a policy-declared adoption_boundary, ADR-024)")
+	f.StringVar(&from, "from", "", "previous release tag; empty = first release (root..TO, or boundary..TO under a policy-declared adoption_boundary, ADR-026)")
 	f.StringVar(&to, "to", "HEAD", "proposed release commit (revision)")
 	f.StringVar(&policyPath, "policy", ".semver-trust/policy.toml", "policy file path within TO's tree")
 	f.StringVar(&allowedSigners, "allowed-signers", "", "filesystem allowed-signers override; empty resolves the policy's identity.human.allowed_signers from TO's tree")

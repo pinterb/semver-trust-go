@@ -19,6 +19,7 @@ tasks:
     desc: Compile all packages
     cmds:
       - go build ./...
+      - go build -o bin/semver-trust ./cmd/semver-trust
 
   lint:
     desc: Run all linters

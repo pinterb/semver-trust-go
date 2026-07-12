@@ -463,7 +463,7 @@ func TestReleaseRefusesExistingTagThenIterates(t *testing.T) {
 	verifyTagWithGit(t, repo, "v0.1.1-t0.2")
 }
 
-// An adoption-boundary release (ADR-024): the policy declares the boundary,
+// An adoption-boundary release (ADR-026): the policy declares the boundary,
 // a first release anchors there, and the attestation discloses it —
 // range.from is the boundary and from_is_adoption_boundary is true.
 func TestReleaseAdoptionBoundaryDisclosed(t *testing.T) {
@@ -509,11 +509,11 @@ func TestReleaseAdoptionBoundaryDisclosed(t *testing.T) {
 		t.Errorf("range.from = %v, want the declared boundary", stmt.Predicate.Range.From)
 	}
 	if !stmt.Predicate.Range.FromIsAdoptionBoundary {
-		t.Error("from_is_adoption_boundary = false, want true (ADR-024: the two claims must never be conflated)")
+		t.Error("from_is_adoption_boundary = false, want true (ADR-026: the two claims must never be conflated)")
 	}
 }
 
-// buildBoundaryReleaseRepo constructs the ADR-024 shape in-test (the
+// buildBoundaryReleaseRepo constructs the ADR-026 shape in-test (the
 // boundary_test.go pattern): an unverifiable pre-scheme commit tagged
 // v0-import, then alice adopting the scheme with the boundary declared.
 func buildBoundaryReleaseRepo(t *testing.T) string {
@@ -524,7 +524,7 @@ func buildBoundaryReleaseRepo(t *testing.T) string {
 		t.Fatalf("git init: %v\n%s", err, out)
 	}
 
-	policy := `# semver-trust TEST POLICY - in-test adoption-boundary release repo (ADR-024)
+	policy := `# semver-trust TEST POLICY - in-test adoption-boundary release repo (ADR-026)
 [policy]
 version   = "0.1"
 threshold = "T2"
@@ -539,7 +539,7 @@ required_level = "T2"
 		"pre.txt", "pre-scheme content\n", "feat: pre-scheme change\n\nProvenance: human")
 	gitCLI(t, repo, "tag", "v0-import")
 	commitSignedCLI(t, repo, keys, "human-alice", "alice@semver-trust.test",
-		".semver-trust/policy.toml", policy, "feat: adopt semver-trust (ADR-024)\n\nProvenance: human")
+		".semver-trust/policy.toml", policy, "feat: adopt semver-trust (ADR-026)\n\nProvenance: human")
 	return repo
 }
 

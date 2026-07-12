@@ -318,7 +318,7 @@ required_level = "T3"
 	}
 }
 
-// TestAdoptionBoundary covers the ADR-024 field: a declared boundary loads
+// TestAdoptionBoundary covers the ADR-026 field: a declared boundary loads
 // and round-trips; an absent one stays empty and Marshal emits no key (so
 // declared-but-empty remains distinguishable from absent — and rejected).
 func TestAdoptionBoundary(t *testing.T) {

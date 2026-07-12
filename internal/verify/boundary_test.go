@@ -13,7 +13,7 @@ import (
 	"github.com/semver-trust/semver-trust-go/internal/vcs"
 )
 
-// The ADR-024 adoption-boundary tests build their repository in-test (plain
+// The ADR-026 adoption-boundary tests build their repository in-test (plain
 // git via os/exec, the build-fixture-repos.sh pattern; determinism is not
 // required for an in-test repo). The history mirrors the live case that
 // motivated the ADR — the earliest commit's public key is lost:
@@ -28,7 +28,7 @@ import (
 // verifying commit3 with no FROM anchors at boundary..TO and proceeds, with
 // the boundary disclosed and commit1 contributing nothing.
 
-const boundaryPolicyHeader = `# semver-trust TEST POLICY - in-test adoption-boundary repo (ADR-024)
+const boundaryPolicyHeader = `# semver-trust TEST POLICY - in-test adoption-boundary repo (ADR-026)
 [policy]
 version   = "0.1"
 threshold = "T2"
@@ -121,11 +121,11 @@ func buildBoundaryRepo(t *testing.T) (repo, preBoundarySHA, adoptionSHA string) 
 	withBoundary := boundaryPolicyHeader + "adoption_boundary = \"v0-import\"\n" + boundaryPolicyTail
 	commitSigned(t, repo, keys, "human-alice", "alice@semver-trust.test",
 		".semver-trust/policy.toml", withBoundary,
-		"fix: declare adoption boundary (ADR-024)\n\nProvenance: human")
+		"fix: declare adoption boundary (ADR-026)\n\nProvenance: human")
 	return repo, preBoundarySHA, adoptionSHA
 }
 
-// TestVerifyAdoptionBoundary is the before/after acceptance for ADR-024:
+// TestVerifyAdoptionBoundary is the before/after acceptance for ADR-026:
 // without a declared boundary a first release aborts on the unverifiable
 // pre-scheme commit; with the boundary declared in the TO tree's policy the
 // same repository verifies boundary..TO, disclosing the boundary and giving
@@ -162,7 +162,7 @@ func TestVerifyAdoptionBoundary(t *testing.T) {
 		t.Fatalf("Verify with declared boundary: %v", err)
 	}
 
-	// Disclosure (ADR-024): the boundary is marked and resolved in the report.
+	// Disclosure (ADR-026): the boundary is marked and resolved in the report.
 	if !report.FromIsAdoptionBoundary {
 		t.Error("FromIsAdoptionBoundary = false, want true")
 	}
@@ -201,7 +201,7 @@ func TestVerifyAdoptionBoundary(t *testing.T) {
 	if err := report.WriteText(&text); err != nil {
 		t.Fatalf("WriteText: %v", err)
 	}
-	want := "range: v0-import..main (FROM is the adoption boundary declared in policy — history before it is exempt and makes no claim; ADR-024)"
+	want := "range: v0-import..main (FROM is the adoption boundary declared in policy — history before it is exempt and makes no claim; ADR-026)"
 	if !strings.Contains(text.String(), want) {
 		t.Errorf("human output missing boundary disclosure %q:\n%s", want, text.String())
 	}
@@ -237,7 +237,7 @@ func TestVerifyAdoptionBoundaryUnresolvable(t *testing.T) {
 		VerifyTime:         pinnedEpoch,
 	}, pol)
 	assertAbortStep(t, err, stepEnumerate)
-	for _, want := range []string{"no-such-rev", "adoption_boundary", "ADR-024", "does not resolve"} {
+	for _, want := range []string{"no-such-rev", "adoption_boundary", "ADR-026", "does not resolve"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error = %q, want it to contain %q", err, want)
 		}
@@ -265,7 +265,7 @@ func TestVerifyAdoptionBoundaryNotAncestor(t *testing.T) {
 		VerifyTime:         pinnedEpoch,
 	}, pol)
 	assertAbortStep(t, err, stepEnumerate)
-	for _, want := range []string{"§10.2", "not an ancestor", "adoption_boundary", "ADR-024"} {
+	for _, want := range []string{"§10.2", "not an ancestor", "adoption_boundary", "ADR-026"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error = %q, want it to contain %q", err, want)
 		}

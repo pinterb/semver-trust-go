@@ -23,15 +23,14 @@ func newRootCmd() *cobra.Command {
 provenance of source changes, aggregates it into a trust level, and verifies a
 release against a repository policy (spec §10).
 
-Available now: verify (GO-040) — walk a release range and report per-commit
-provenance and effective trust; release (GO-042) — decide channel and version
-and emit the signed tag plus the release attestation (§10 steps 8-9); promote
-(GO-043) — re-decide a pre-release at its own SHA with new evidence and, if it
-now qualifies, cut the clean tag on the identical commit with a superseding
-attestation (§7.3); attest
-review — emit a signed §4.3 review attestation over commits; policy
+Commands: verify — walk a release range and report per-commit provenance and
+effective trust; release — decide channel and version and emit the signed tag
+plus the release attestation (§10 steps 8-9); promote — re-decide a
+pre-release at its own SHA with new evidence and, if it now qualifies, cut the
+clean tag on the identical commit with a superseding attestation (§7.3);
+attest review — emit a signed §4.3 review attestation over commits; policy
 validate/explain and the zero-configuration plain-mode tag commands list,
-latest, next, and tag (GO-041).`,
+latest, next, and tag.`,
 		SilenceUsage: true,
 		Version:      versionString(),
 	}

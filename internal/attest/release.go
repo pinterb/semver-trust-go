@@ -100,7 +100,7 @@ type ReleaseInput struct {
 	// first release from the repository root and is emitted as null (§5.2).
 	RangeFrom string
 	// FromIsAdoptionBoundary discloses that RangeFrom is the policy-pinned
-	// adoption boundary (ADR-024): "verified since the boundary" is a
+	// adoption boundary (ADR-026): "verified since the boundary" is a
 	// different claim from "verified since inception".
 	FromIsAdoptionBoundary bool
 
@@ -159,7 +159,7 @@ type releasePredicateJSON struct {
 type releaseRangeJSON struct {
 	From *string `json:"from"` // present-and-null for a first release
 	To   string  `json:"to"`
-	// FromIsAdoptionBoundary is the ADR-024 disclosure marker, additive
+	// FromIsAdoptionBoundary is the ADR-026 disclosure marker, additive
 	// within v0.1 and omitted when false.
 	FromIsAdoptionBoundary bool `json:"from_is_adoption_boundary,omitempty"`
 }
@@ -257,7 +257,7 @@ func BuildReleaseStatement(in ReleaseInput) ([]byte, error) {
 		from = &in.RangeFrom
 	}
 	if in.FromIsAdoptionBoundary && from == nil {
-		return nil, errors.New("attest: from_is_adoption_boundary requires the boundary in range.from (ADR-024 disclosure)")
+		return nil, errors.New("attest: from_is_adoption_boundary requires the boundary in range.from (ADR-026 disclosure)")
 	}
 
 	var floorSource *componentVersionJSON

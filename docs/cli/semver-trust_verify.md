@@ -15,7 +15,7 @@ the spec §10 step that failed (unverifiable is never T0, §5.2; the config
 protects the system, §5.4).
 
 A first release (no --from) anchors at the adoption boundary when the policy
-declares one ([policy] adoption_boundary, ADR-024): history before the
+declares one ([policy] adoption_boundary, ADR-026): history before the
 boundary is exempt and makes no claim, and the report discloses the boundary
 in both renderings. The boundary is policy-pinned by design — there is no
 flag for it, because a CLI-supplied boundary could be moved by whoever runs
@@ -31,7 +31,7 @@ semver-trust verify [flags]
       --allowed-signers string       filesystem allowed-signers override; empty resolves the policy's identity.human.allowed_signers from TO's tree
       --attestation-signers string   filesystem attestation-signer registry; overrides the policy. Empty resolves [identity] attestation_signers from TO's tree (§9); if the policy declares none either, reviews cannot be verified and classify none
       --component string             workspace component to headline; empty = single/root component
-      --from string                  previous release tag; empty = first release (root..TO, or boundary..TO under a policy-declared adoption_boundary, ADR-024)
+      --from string                  previous release tag; empty = first release (root..TO, or boundary..TO under a policy-declared adoption_boundary, ADR-026)
       --gpg-keyring string           armored OpenPGP public keyring for GPG-signed commits; overrides the policy. Empty resolves [identity.human] gpg_keyring from TO's tree (§9); if the policy declares none either, the GPG key family is unverifiable and fails closed
   -h, --help                         help for verify
       --json                         emit a structured JSON report instead of the human table

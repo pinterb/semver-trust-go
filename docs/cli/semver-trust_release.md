@@ -42,7 +42,7 @@ semver-trust release [flags]
       --claimed-bump string          the bump this release claims: patch|minor|major (required)
       --component string             component to release (tag prefix and attestation component); empty = the single/root component
       --dry-run                      evaluate and decide, print the would-be tag and attestation, write nothing
-      --from string                  previous release tag; empty = first release (root..TO, or boundary..TO under a policy-declared adoption_boundary, ADR-024)
+      --from string                  previous release tag; empty = first release (root..TO, or boundary..TO under a policy-declared adoption_boundary, ADR-026)
       --gpg-keyring string           armored OpenPGP public keyring for GPG-signed commits; overrides the policy. Empty resolves [identity.human] gpg_keyring from TO's tree (§9); if the policy declares none either, the GPG key family is unverifiable and fails closed
   -h, --help                         help for release
       --iteration uint               trust-suffix iteration for a pre-release cut (§7.2 re-cuts increment it) (default 1)

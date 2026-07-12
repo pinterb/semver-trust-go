@@ -6,7 +6,7 @@
 version   = "0.1"
 threshold = "T2"        # minimum effective trust for the clean channel
 strategy  = "demote"    # "demote" (recommended) | "inflate"
-# adoption_boundary = "v0.0.0"   # optional (§5.2, ADR-024): commit/tag before which history is exempt
+# adoption_boundary = "v0.0.0"   # optional (§5.2, ADR-026): commit/tag before which history is exempt
 
 [scopes]
 "services/auth/**"    = "auth"

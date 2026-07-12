@@ -118,6 +118,7 @@ clean, or the trust-tagged pre-release channel that default resolvers skip. See
 |---|---|
 | `verify` | Walk a release range and report per-commit provenance and effective trust (§10 steps 1–7); fails closed on anything unverifiable. |
 | `release` | Decide the channel and version, then create the signed tag and emit the release attestation (§10 steps 8–9). |
+| `promote` | Re-decide a pre-release at its own SHA with new evidence; if it now qualifies, cut the clean tag on the identical commit with a superseding attestation (§7.3). |
 | `attest review` | Emit a signed §4.3 review attestation over a range of commits. |
 | `policy validate` / `policy explain` | Parse a policy and print its digest, or render the decision table in effect. |
 | `list` / `latest` / `next` / `tag` | Zero-configuration plain-mode tag operations (node-semver parity). |

@@ -62,3 +62,8 @@ jobs:
 
       - name: Vulnerability scan
         run: devbox run -- task vuln
+
+      # The generated CLI reference must match the command tree — a help-text
+      # edit without `task docs:cli` fails here instead of shipping stale docs.
+      - name: CLI reference drift
+        run: devbox run -- task docs:cli && git diff --exit-code docs/cli/

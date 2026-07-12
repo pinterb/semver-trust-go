@@ -26,8 +26,9 @@ reference. This file adds the rules specific to writing code here.
    keys, per the spec repository's crypto fixture plan — a compliant
    fixture is a clearly-labeled test double that cannot escape the test
    tree.
-3. **Pin the spec version** this code targets (currently draft v0.2) in
-   one place; conformance is always claimed against a stated version.
+3. **Pin the spec version** this code targets in one place —
+   `conformance/manifest.json` (currently draft v0.3); conformance is
+   always claimed against a stated version.
 
 ## Provenance discipline (this repo dogfoods the scheme)
 

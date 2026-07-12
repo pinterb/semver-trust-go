@@ -134,7 +134,7 @@ func TestReleaseEmitVerifiesIndependently(t *testing.T) {
 		t.Errorf("range.from = %s, want null (first release, §5.2)", got)
 	}
 	if _, present := predicate.Range["from_is_adoption_boundary"]; present {
-		t.Error("from_is_adoption_boundary present without a boundary (ADR-024: disclose only what holds)")
+		t.Error("from_is_adoption_boundary present without a boundary (ADR-026: disclose only what holds)")
 	}
 	if got := string(predicate.Trust["floor_source"]); got != "null" {
 		t.Errorf("trust.floor_source = %s, want null (self-floored, §5.3)", got)
@@ -147,7 +147,7 @@ func TestReleaseEmitVerifiesIndependently(t *testing.T) {
 	}
 }
 
-// A boundary-anchored release carries the ADR-024 disclosure: range.from is
+// A boundary-anchored release carries the ADR-026 disclosure: range.from is
 // the boundary and from_is_adoption_boundary is true — and the payload still
 // validates against the vendored release-v0.1.json.
 func TestReleaseEmitDisclosesAdoptionBoundary(t *testing.T) {
@@ -178,7 +178,7 @@ func TestReleaseEmitDisclosesAdoptionBoundary(t *testing.T) {
 		t.Errorf("range.from = %v, want the boundary revision", payload.Predicate.Range.From)
 	}
 	if !payload.Predicate.Range.FromIsAdoptionBoundary {
-		t.Error("from_is_adoption_boundary = false, want true (ADR-024 disclosure)")
+		t.Error("from_is_adoption_boundary = false, want true (ADR-026 disclosure)")
 	}
 }
 

@@ -13,7 +13,7 @@
 // the same reason: unknown values mean unknown semantics.
 //
 // Three keys are optional and absent by default (spec §9, adopted in the
-// v0.3 pass): [policy] adoption_boundary (ADR-024) is policy-pinned on
+// v0.3 pass): [policy] adoption_boundary (ADR-026) is policy-pinned on
 // purpose — see Policy.AdoptionBoundary; [identity.human] gpg_keyring and
 // [identity] attestation_signers (ADR-022) name in-tree trust-material paths
 // that the verifier MAY default its --gpg-keyring / --attestation-signers

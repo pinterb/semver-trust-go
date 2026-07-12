@@ -10,12 +10,12 @@ type Report struct {
 	Repo string `json:"repo"`
 	// From is the range anchor: the CLI FROM when one was given, or — for a
 	// first release under a policy-declared adoption boundary — the boundary
-	// revision as declared in the policy (ADR-024).
+	// revision as declared in the policy (ADR-026).
 	From     string `json:"from"`
 	To       string `json:"to"`
 	ToCommit string `json:"to_commit"`
 	// FromIsAdoptionBoundary discloses that From is the adoption boundary
-	// declared in the policy ([policy] adoption_boundary, ADR-024): history
+	// declared in the policy ([policy] adoption_boundary, ADR-026): history
 	// before it is exempt and makes no claim. "Verified since the boundary"
 	// and "verified since inception" are different claims and must never be
 	// conflated, so the marker rides every rendering of a boundary-anchored

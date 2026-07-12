@@ -24,7 +24,7 @@
 // naming the §10 step it failed at, so the one-line reason the CLI prints to
 // stderr is traceable to the algorithm.
 //
-// # The adoption boundary (ADR-024)
+// # The adoption boundary (ADR-026)
 //
 // A policy MAY declare an adoption boundary ([policy] adoption_boundary): a
 // revision before which history is exempt from verification. A first release
