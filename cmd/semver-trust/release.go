@@ -276,10 +276,16 @@ func decideRelease(report *verify.Report, from, component string, claimed eviden
 		return trust.Decision{}, verify.ComponentEffective{}, err
 	}
 
+	threshold, err := trust.ParseLevel(report.Policy.Threshold)
+	if err != nil {
+		return trust.Decision{}, verify.ComponentEffective{}, err
+	}
+
 	decision, err := trust.Decide(trust.DecideInputs{
 		Effective:       effective,
 		Blast:           blast,
 		Strategy:        strategy,
+		Threshold:       threshold,
 		DifferAvailable: report.Evidence.DifferAvailable,
 		SemanticFloor:   floor,
 		ClaimedBump:     claimed,

@@ -124,7 +124,7 @@ meta-paths, and derivation rules.`,
 func writeExplain(out io.Writer, p *policy.Policy, path string) error {
 	e := &errWriter{w: out}
 	e.printf("decision table in effect (§6.4 default) — policy %s\n\n", path)
-	e.printf("threshold: %s (minimum effective trust for the clean channel)\n", p.Threshold)
+	e.printf("threshold: %s (hard gate applied before the table — effective trust below it demotes regardless of cell; §6.2, ADR-032)\n", p.Threshold)
 	e.printf("strategy:  %s — %s\n\n", p.Strategy, strategyNote(p.Strategy))
 
 	tw := tabwriter.NewWriter(out, 2, 0, 2, ' ', 0)

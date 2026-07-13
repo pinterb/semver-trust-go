@@ -81,6 +81,14 @@ type DecideInputs struct {
 	Blast     Blast
 	Strategy  Strategy
 
+	// Threshold is the policy's minimum effective trust level for the clean
+	// channel (§6.2, ADR-032). It is applied as a hard gate BEFORE the
+	// blast/differ table: a release whose Effective is below Threshold cannot
+	// enter the clean channel regardless of blast score or differ evidence.
+	// The zero value (T0) is a no-op gate — no release is below T0 — so a
+	// caller that does not set it gets the pre-ADR-032 table-only behavior.
+	Threshold Level
+
 	// DifferAvailable reports whether a compatibility differ exists for the
 	// ecosystem. When false, SemanticFloor comes from declared intent
 	// (§6.1(2)) and the §6.4 "differ proof required" cells cannot be
@@ -172,8 +180,8 @@ func Decide(in DecideInputs) (Decision, error) {
 	if in.Iteration < 1 {
 		return Decision{}, fmt.Errorf("decide: iteration %d out of range (starts at 1, §7.1)", in.Iteration)
 	}
-	if in.Effective > T3 || in.Blast > BlastHigh {
-		return Decision{}, fmt.Errorf("decide: invalid inputs (effective %d, blast %d)", in.Effective, in.Blast)
+	if in.Effective > T3 || in.Blast > BlastHigh || in.Threshold > T3 {
+		return Decision{}, fmt.Errorf("decide: invalid inputs (effective %d, blast %d, threshold %d)", in.Effective, in.Blast, in.Threshold)
 	}
 
 	// The semantic floor is honored unconditionally (§10 step 8): the final
@@ -183,9 +191,14 @@ func Decide(in DecideInputs) (Decision, error) {
 		bump = in.SemanticFloor
 	}
 
+	// The accountability threshold is a hard gate applied before the
+	// blast/differ table (§6.2, ADR-032): below it, the clean channel is
+	// unavailable no matter what the table cell says.
+	belowThreshold := in.Effective < in.Threshold
+
 	c := decisionTable[in.Effective][in.Blast]
 	differNeeded := c == CellDifferAny || (c == CellDifferPatch && bump == evidence.BumpPatch)
-	demoted := c == CellPrerelease || (differNeeded && !in.DifferAvailable)
+	demoted := belowThreshold || c == CellPrerelease || (differNeeded && !in.DifferAvailable)
 
 	if in.Strategy == StrategyInflate {
 		if demoted {

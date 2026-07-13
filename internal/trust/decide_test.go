@@ -248,3 +248,77 @@ func TestDecisionCell(t *testing.T) {
 		t.Error("DecisionCell accepted an out-of-range level")
 	}
 }
+
+// TestDecideThresholdGate is the ADR-032 acceptance: the policy threshold is a
+// hard gate applied before the §6.4 table. A release whose effective trust is
+// below the threshold cannot enter the clean channel even in a cell that would
+// otherwise go clean, while at or above the threshold the table decides as
+// before. The zero-value threshold (T0) is a no-op.
+func TestDecideThresholdGate(t *testing.T) {
+	// T2/low is CellClean. Under threshold T3 it must demote (below threshold);
+	// under threshold T2 it stays clean (at threshold); under the zero-value
+	// threshold it stays clean (no-op gate).
+	base := DecideInputs{
+		Effective: T2, Blast: BlastLow, Strategy: StrategyDemote,
+		DifferAvailable: true,
+		SemanticFloor:   evidence.BumpPatch, ClaimedBump: evidence.BumpPatch,
+		Current: mustParse(t, "v1.2.3"), Iteration: 1,
+	}
+	cases := []struct {
+		name      string
+		threshold Level
+		want      Channel
+		wantVer   string
+	}{
+		{"below threshold demotes a clean cell", T3, ChannelPrerelease, "v1.2.4-t2.1"},
+		{"at threshold stays clean", T2, ChannelClean, "v1.2.4"},
+		{"zero-value threshold is a no-op", T0, ChannelClean, "v1.2.4"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			in := base
+			in.Threshold = tt.threshold
+			got, err := Decide(in)
+			if err != nil {
+				t.Fatalf("Decide: %v", err)
+			}
+			if got.Channel != tt.want {
+				t.Errorf("channel = %s, want %s", got.Channel, tt.want)
+			}
+			if got.Version.String() != tt.wantVer {
+				t.Errorf("version = %s, want %s", got.Version, tt.wantVer)
+			}
+		})
+	}
+
+	// The gate is a floor, not an override: it can only demote a would-be-clean
+	// release, never promote a demoted one. T1/low is CellDifferAny; even with
+	// threshold T0 and a differ, it follows the table.
+	got, err := Decide(DecideInputs{
+		Effective: T1, Blast: BlastLow, Strategy: StrategyDemote, Threshold: T0,
+		DifferAvailable: true,
+		SemanticFloor:   evidence.BumpMinor, ClaimedBump: evidence.BumpMinor,
+		Current: mustParse(t, "v1.2.3"), Iteration: 1,
+	})
+	if err != nil {
+		t.Fatalf("Decide: %v", err)
+	}
+	if got.Channel != ChannelClean {
+		t.Errorf("T1/low with differ and T0 threshold = %s, want clean (the gate never promotes)", got.Channel)
+	}
+
+	// The gate composes with the inflate strategy: below threshold escalates
+	// rather than demoting to the pre-release channel (§6.3).
+	got, err = Decide(DecideInputs{
+		Effective: T2, Blast: BlastLow, Strategy: StrategyInflate, Threshold: T3,
+		DifferAvailable: true,
+		SemanticFloor:   evidence.BumpPatch, ClaimedBump: evidence.BumpPatch,
+		Current: mustParse(t, "v1.2.3"), Iteration: 1,
+	})
+	if err != nil {
+		t.Fatalf("Decide: %v", err)
+	}
+	if !got.Escalate || got.Channel != ChannelClean {
+		t.Errorf("below-threshold inflate = %+v, want escalate on the clean channel", got)
+	}
+}
