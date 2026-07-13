@@ -24,13 +24,21 @@ while the model is adopted incrementally (tracked in
 | decision | §6.2–6.4 threshold gate + decision table (ADR-032) | **enforced** |
 | signature | §4.2 / §10 commit-signature verification | **enforced** |
 | attestation | §8.2 DSSE verify (v0.1 in production; v0.1/v0.2 **schema** validation in the conformance harness) | **enforced** |
-| review-qualification | §4.3 qualified review + canonical actors (ADR-031) | pending |
+| review-qualification | §4.3 qualified review + canonical actors (ADR-031) | **enforced** |
 | range | §5.2 exact release intervals (ADR-027) | pending |
 | policy-transition | §5.4 bootstrap + policy transitions (ADR-028) | pending |
 | version-ancestry | §7.5 authenticated version state (ADR-029) | pending |
 | source-evidence | §8.3 SLSA Source profiles (ADR-035) | pending |
 | publishing-profile | §7.4 ecosystem routing (ADR-034) | pending |
 | predicate-v0.2 | §8.1 release/v0.2 payload validation (ADR-030) | pending |
+
+**What "review-qualification enforced" covers today:** the ADR-031 qualification
+logic (`trust.QualifyReview`) — approved-verdict, active-at-merge, final-revision
+or final-diff binding, canonical-actor distinctness, and agent independence — is
+implemented and passes the suite. The **production** verify path still consumes
+review/v0.1 attestations, where the verdict half is already enforced (#78) and
+distinctness uses raw signer identity; migrating it to build the qualified facts
+from review/v0.2 predicates and the policy actor map is tracked in #76.
 
 **What "attestation enforced" covers today:** the `attest.Verifier` is generic —
 it verifies signatures against the injected attestation-signer registry and

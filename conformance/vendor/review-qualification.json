@@ -1,0 +1,290 @@
+{
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "spec_version": "0.10",
+  "description": "Qualified-review vectors for final-revision approval, canonical actor identity, and independent agent corroboration.",
+  "vectors": [
+    {
+      "id": "review-qualification/rejects-comment",
+      "kind": "review_qualification",
+      "description": "A comment is not an approval and cannot raise trust.",
+      "spec": "§4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "agent", "actor": "actor:agent:writer" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:alice",
+          "credential_actor": "actor:human:alice",
+          "verdict": "commented",
+          "approval_state": "active",
+          "coverage": "final_revision",
+          "approved_revision": "rev:final",
+          "final_revision": "rev:final",
+          "effective_at_merge": true,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "merge", "capture_mode": "native", "post_approval_change": false }
+      },
+      "expected": { "review": "none", "level": "T0", "reason": "verdict_not_approved" }
+    },
+    {
+      "id": "review-qualification/rejects-changes-requested",
+      "kind": "review_qualification",
+      "description": "A changes-requested verdict is not a qualifying review.",
+      "spec": "§4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "agent", "actor": "actor:agent:writer" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:alice",
+          "credential_actor": "actor:human:alice",
+          "verdict": "changes_requested",
+          "approval_state": "active",
+          "coverage": "final_revision",
+          "approved_revision": "rev:final",
+          "final_revision": "rev:final",
+          "effective_at_merge": true,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "merge", "capture_mode": "native", "post_approval_change": false }
+      },
+      "expected": { "review": "none", "level": "T0", "reason": "verdict_not_approved" }
+    },
+    {
+      "id": "review-qualification/rejects-stale-approval",
+      "kind": "review_qualification",
+      "description": "A stale approval is not effective at merge.",
+      "spec": "§4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "agent", "actor": "actor:agent:writer" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:alice",
+          "credential_actor": "actor:human:alice",
+          "verdict": "approved",
+          "approval_state": "stale",
+          "coverage": "final_revision",
+          "approved_revision": "rev:old",
+          "final_revision": "rev:final",
+          "effective_at_merge": false,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "merge", "capture_mode": "native", "post_approval_change": true }
+      },
+      "expected": { "review": "none", "level": "T0", "reason": "approval_not_active" }
+    },
+    {
+      "id": "review-qualification/rejects-withdrawn-approval",
+      "kind": "review_qualification",
+      "description": "A withdrawn approval is not active at merge.",
+      "spec": "§4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "agent", "actor": "actor:agent:writer" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:alice",
+          "credential_actor": "actor:human:alice",
+          "verdict": "approved",
+          "approval_state": "withdrawn",
+          "coverage": "final_revision",
+          "approved_revision": "rev:final",
+          "final_revision": "rev:final",
+          "effective_at_merge": false,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "merge", "capture_mode": "native", "post_approval_change": false }
+      },
+      "expected": { "review": "none", "level": "T0", "reason": "approval_not_active" }
+    },
+    {
+      "id": "review-qualification/rejects-wrong-revision",
+      "kind": "review_qualification",
+      "description": "An approval bound to a different final revision does not qualify.",
+      "spec": "§4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "agent", "actor": "actor:agent:writer" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:alice",
+          "credential_actor": "actor:human:alice",
+          "verdict": "approved",
+          "approval_state": "active",
+          "coverage": "final_revision",
+          "approved_revision": "rev:old",
+          "final_revision": "rev:final",
+          "effective_at_merge": true,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "merge", "capture_mode": "native", "post_approval_change": false }
+      },
+      "expected": { "review": "none", "level": "T0", "reason": "revision_mismatch" }
+    },
+    {
+      "id": "review-qualification/rejects-post-approval-change",
+      "kind": "review_qualification",
+      "description": "Later changes after approval require re-approval unless the source-control profile proves the approved diff is preserved.",
+      "spec": "§4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "agent", "actor": "actor:agent:writer" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:alice",
+          "credential_actor": "actor:human:alice",
+          "verdict": "approved",
+          "approval_state": "active",
+          "coverage": "final_revision",
+          "approved_revision": "rev:old",
+          "final_revision": "rev:old",
+          "effective_at_merge": true,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "merge", "capture_mode": "native", "post_approval_change": true }
+      },
+      "expected": { "review": "none", "level": "T0", "reason": "post_approval_change" }
+    },
+    {
+      "id": "review-qualification/rejects-one-actor-two-credentials-for-t3",
+      "kind": "review_qualification",
+      "description": "Two credentials mapped to one canonical human actor do not create T3.",
+      "spec": "§3.2, §4.2, §4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "human", "actor": "actor:human:alice", "credential": "ssh:alice-old" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:alice",
+          "credential": "ssh:alice-current",
+          "credential_actor": "actor:human:alice",
+          "verdict": "approved",
+          "approval_state": "active",
+          "coverage": "final_revision",
+          "approved_revision": "rev:final",
+          "final_revision": "rev:final",
+          "effective_at_merge": true,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "merge", "capture_mode": "native", "post_approval_change": false }
+      },
+      "expected": { "review": "none", "level": "T2", "reason": "same_canonical_actor" }
+    },
+    {
+      "id": "review-qualification/rejects-non-independent-agent",
+      "kind": "review_qualification",
+      "description": "Agent review without separate execution evidence does not lift T0 to T1.",
+      "spec": "§3.3, §4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "agent", "actor": "actor:agent:writer" },
+        "review": {
+          "class": "agent",
+          "actor": "actor:agent:reviewer",
+          "credential_actor": "actor:agent:reviewer",
+          "verdict": "approved",
+          "approval_state": "active",
+          "coverage": "final_revision",
+          "approved_revision": "rev:final",
+          "final_revision": "rev:final",
+          "effective_at_merge": true,
+          "signed_attestation": true,
+          "separate_context": false
+        },
+        "merge": { "strategy": "merge", "capture_mode": "native", "post_approval_change": false }
+      },
+      "expected": { "review": "none", "level": "T0", "reason": "agent_not_independent" }
+    },
+    {
+      "id": "review-qualification/accepts-key-rotation-same-human-as-first-count",
+      "kind": "review_qualification",
+      "description": "A rotated key for the signer can still count once when reviewing agent-authored work.",
+      "spec": "§3.2, §4.2, §4.3, ADR-025, ADR-031",
+      "inputs": {
+        "authorship": { "class": "agent", "actor": "actor:agent:writer", "credential": "ssh:alice-old" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:alice",
+          "credential": "ssh:alice-current",
+          "credential_actor": "actor:human:alice",
+          "verdict": "approved",
+          "approval_state": "active",
+          "coverage": "final_revision",
+          "approved_revision": "rev:final",
+          "final_revision": "rev:final",
+          "effective_at_merge": true,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "merge", "capture_mode": "native", "post_approval_change": false }
+      },
+      "expected": { "review": "human_distinct", "level": "T2", "reason": null }
+    },
+    {
+      "id": "review-qualification/accepts-distinct-human-actors-for-t3",
+      "kind": "review_qualification",
+      "description": "A human-authored change approved by a distinct canonical human actor reaches T3.",
+      "spec": "§3.2, §4.2, §4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "human", "actor": "actor:human:alice" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:bob",
+          "credential_actor": "actor:human:bob",
+          "verdict": "approved",
+          "approval_state": "active",
+          "coverage": "final_revision",
+          "approved_revision": "rev:final",
+          "final_revision": "rev:final",
+          "effective_at_merge": true,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "merge", "capture_mode": "native", "post_approval_change": false }
+      },
+      "expected": { "review": "human_distinct", "level": "T3", "reason": null }
+    },
+    {
+      "id": "review-qualification/accepts-squash-final-diff",
+      "kind": "review_qualification",
+      "description": "A squash merge can qualify when the approved final diff is preserved into the result revision.",
+      "spec": "§4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "agent", "actor": "actor:agent:writer" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:alice",
+          "credential_actor": "actor:human:alice",
+          "verdict": "approved",
+          "approval_state": "active",
+          "coverage": "final_diff",
+          "approved_revision": "rev:source-head",
+          "final_revision": "rev:source-head",
+          "approved_diff": "sha256:diff-a",
+          "result_diff": "sha256:diff-a",
+          "effective_at_merge": true,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "squash", "capture_mode": "pre_rewrite", "post_approval_change": false }
+      },
+      "expected": { "review": "human_distinct", "level": "T2", "reason": null }
+    },
+    {
+      "id": "review-qualification/accepts-rebase-final-diff",
+      "kind": "review_qualification",
+      "description": "A rebase merge can qualify when the approved final diff is preserved into the result revision.",
+      "spec": "§4.3, ADR-031",
+      "inputs": {
+        "authorship": { "class": "agent", "actor": "actor:agent:writer" },
+        "review": {
+          "class": "human",
+          "actor": "actor:human:alice",
+          "credential_actor": "actor:human:alice",
+          "verdict": "approved",
+          "approval_state": "active",
+          "coverage": "final_diff",
+          "approved_revision": "rev:source-head",
+          "final_revision": "rev:source-head",
+          "approved_diff": "sha256:diff-a",
+          "result_diff": "sha256:diff-a",
+          "effective_at_merge": true,
+          "signed_attestation": true
+        },
+        "merge": { "strategy": "rebase", "capture_mode": "pre_rewrite", "post_approval_change": false }
+      },
+      "expected": { "review": "human_distinct", "level": "T2", "reason": null }
+    }
+  ]
+}
