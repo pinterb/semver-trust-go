@@ -47,7 +47,7 @@ func TestConformanceVersionAncestry(t *testing.T) {
 			if got.AdvancesVersionHead != e.AdvancesVersionHead {
 				t.Errorf("advances_version_head = %v, want %v", got.AdvancesVersionHead, e.AdvancesVersionHead)
 			}
-			if e.CorrectiveFloor != nil && !reflect.DeepEqual(got.CorrectiveFloor, e.CorrectiveFloor) {
+			if !reflect.DeepEqual(got.CorrectiveFloor, e.CorrectiveFloor) {
 				t.Errorf("corrective_floor = %v, want %v", deref(got.CorrectiveFloor), deref(e.CorrectiveFloor))
 			}
 		})
