@@ -5,7 +5,7 @@ go 1.26.3
 toolchain go1.26.5
 
 require (
-	github.com/ProtonMail/go-crypto v1.1.6
+	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
