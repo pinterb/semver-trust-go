@@ -31,6 +31,7 @@ FILES = (
     "aggregation.json",
     "propagation.json",
     "decision.json",
+    "review-qualification.json",
     "LICENSE",
     # Cryptographic fixture material (docs/conformance-crypto-fixtures.md):
     # the injected registry, the deterministic fixture-repo builder, the
