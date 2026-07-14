@@ -26,7 +26,7 @@ while the model is adopted incrementally (tracked in
 | attestation | §8.2 DSSE verify (v0.1 in production; v0.1/v0.2 **schema** validation in the conformance harness) | **enforced** |
 | review-qualification | §4.3 qualified review + canonical actors (ADR-031) | **enforced** |
 | range | §5.2 exact release intervals (ADR-027) | **enforced** |
-| policy-transition | §5.4 bootstrap + policy transitions (ADR-028) | pending |
+| policy-transition | §5.4 bootstrap + policy transitions (ADR-028) | **enforced** |
 | version-ancestry | §7.5 authenticated version state (ADR-029) | pending |
 | source-evidence | §8.3 SLSA Source profiles (ADR-035) | pending |
 | publishing-profile | §7.4 ecosystem routing (ADR-034) | pending |
@@ -39,6 +39,15 @@ implemented and passes the suite. The **production** verify path still consumes
 review/v0.1 attestations, where the verdict half is already enforced (#78) and
 distinctness uses raw signer identity; migrating it to build the qualified facts
 from review/v0.2 predicates and the policy actor map is tracked in #76.
+
+**What "policy-transition enforced" covers today:** the §5.4/ADR-028
+transition logic (`policy.SelectPolicyTransition`) — active authority from an
+authenticated bootstrap descriptor or the accepted predecessor chain head,
+candidate-activates-next, no self-enrollment, no lowered guardrails, mandatory
+meta-path coverage, and under-level meta-commit rejection — is implemented and
+passes the suite over abstract policy state. The **production** verify path
+still loads the policy from TO (the pre-ADR-028 model); feeding
+`SelectPolicyTransition` real bootstrap/predecessor state is tracked in #76.
 
 **What "range enforced" covers today:** the §5.2/ADR-027 interval-selection
 logic (`vcs.SelectInterval`) — inception, adoption (bootstrap-pinned boundary,

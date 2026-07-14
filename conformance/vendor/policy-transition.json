@@ -1,0 +1,1062 @@
+{
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "spec_version": "0.10",
+  "description": "Bootstrap and previous-policy transition vectors for SemVer-Trust §5.4 and §10 (ADR-028). Policies are immutable fixtures referenced by vectors; the active policy evaluates the current interval and the candidate activates only after success.",
+  "policies": {
+    "policy-a": {
+      "path": ".semver-trust/policy.toml",
+      "digest": "sha256:policy-a",
+      "required_level": "T3",
+      "meta_paths": [".semver-trust/**", ".github/workflows/**"],
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "authorized_signers": ["alice", "bob"],
+      "scope_revision": "scopes-a",
+      "adoption_boundary": null
+    },
+    "policy-adoption-b": {
+      "path": ".semver-trust/policy.toml",
+      "digest": "sha256:policy-adoption-b",
+      "required_level": "T3",
+      "meta_paths": [".semver-trust/**", ".github/workflows/**"],
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "authorized_signers": ["alice", "bob"],
+      "scope_revision": "scopes-a",
+      "adoption_boundary": "b"
+    },
+    "policy-adoption-no-mirror": {
+      "path": ".semver-trust/policy.toml",
+      "digest": "sha256:policy-adoption-no-mirror",
+      "required_level": "T3",
+      "meta_paths": [".semver-trust/**", ".github/workflows/**"],
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "authorized_signers": ["alice", "bob"],
+      "scope_revision": "scopes-a",
+      "adoption_boundary": null
+    },
+    "policy-rotation": {
+      "path": ".semver-trust/policy.toml",
+      "digest": "sha256:policy-rotation",
+      "required_level": "T3",
+      "meta_paths": [".semver-trust/**", ".github/workflows/**"],
+      "trust_material": {
+        ".semver-trust/humans-v2": "sha256:humans-v2",
+        ".semver-trust/attesters-v2": "sha256:attesters-v2"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans-v2",
+        "attestation_signers": ".semver-trust/attesters-v2"
+      },
+      "authorized_signers": ["carol", "dave"],
+      "scope_revision": "scopes-a",
+      "adoption_boundary": null
+    },
+    "policy-scope-b": {
+      "path": ".semver-trust/policy.toml",
+      "digest": "sha256:policy-scope-b",
+      "required_level": "T3",
+      "meta_paths": [".semver-trust/**", ".github/workflows/**"],
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "authorized_signers": ["alice", "bob"],
+      "scope_revision": "scopes-b",
+      "adoption_boundary": null
+    },
+    "policy-lowered": {
+      "path": ".semver-trust/policy.toml",
+      "digest": "sha256:policy-lowered",
+      "required_level": "T2",
+      "meta_paths": [".semver-trust/**", ".github/workflows/**"],
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "authorized_signers": ["alice", "bob"],
+      "scope_revision": "scopes-a",
+      "adoption_boundary": null
+    },
+    "policy-uncovered": {
+      "path": ".semver-trust/policy.toml",
+      "digest": "sha256:policy-uncovered",
+      "required_level": "T3",
+      "meta_paths": [".github/workflows/**"],
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "authorized_signers": ["alice", "bob"],
+      "scope_revision": "scopes-a",
+      "adoption_boundary": null
+    },
+    "policy-workflow-uncovered": {
+      "path": ".semver-trust/policy.toml",
+      "digest": "sha256:policy-workflow-uncovered",
+      "required_level": "T3",
+      "meta_paths": [".semver-trust/**"],
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "authorized_signers": ["alice", "bob"],
+      "scope_revision": "scopes-a",
+      "adoption_boundary": null
+    },
+    "policy-boundary-c": {
+      "path": ".semver-trust/policy.toml",
+      "digest": "sha256:policy-boundary-c",
+      "required_level": "T3",
+      "meta_paths": [".semver-trust/**", ".github/workflows/**"],
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "authorized_signers": ["alice", "bob"],
+      "scope_revision": "scopes-a",
+      "adoption_boundary": "c"
+    },
+    "policy-moved-path": {
+      "path": ".trust/policy.toml",
+      "digest": "sha256:policy-moved-path",
+      "required_level": "T3",
+      "meta_paths": [".trust/**", ".github/workflows/**"],
+      "trust_material": {
+        ".trust/humans": "sha256:humans-a",
+        ".trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".trust/humans",
+        "attestation_signers": ".trust/attesters"
+      },
+      "authorized_signers": ["alice", "bob"],
+      "scope_revision": "scopes-a",
+      "adoption_boundary": null
+    }
+  },
+  "bootstraps": {
+    "bootstrap-a": {
+      "authenticated": true,
+      "repository": "https://example.test/acme/repo",
+      "component": "app",
+      "range_mode": "inception",
+      "boundary": null,
+      "policy_path": ".semver-trust/policy.toml",
+      "policy_digest": "sha256:policy-a",
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "verification_profile": "release-time@v1",
+      "clock_profile": "injected-rfc3339@v1",
+      "mandatory_meta_paths": [".github/workflows/semver-trust.yml"]
+    },
+    "bootstrap-adoption-b": {
+      "authenticated": true,
+      "repository": "https://example.test/acme/repo",
+      "component": "app",
+      "range_mode": "adoption",
+      "boundary": "b",
+      "policy_path": ".semver-trust/policy.toml",
+      "policy_digest": "sha256:policy-adoption-b",
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "verification_profile": "release-time@v1",
+      "clock_profile": "injected-rfc3339@v1",
+      "mandatory_meta_paths": [".github/workflows/semver-trust.yml"]
+    },
+    "bootstrap-bad-policy": {
+      "authenticated": true,
+      "repository": "https://example.test/acme/repo",
+      "component": "app",
+      "range_mode": "inception",
+      "boundary": null,
+      "policy_path": ".semver-trust/policy.toml",
+      "policy_digest": "sha256:not-policy-a",
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "verification_profile": "release-time@v1",
+      "clock_profile": "injected-rfc3339@v1",
+      "mandatory_meta_paths": [".github/workflows/semver-trust.yml"]
+    },
+    "bootstrap-wrong-boundary": {
+      "authenticated": true,
+      "repository": "https://example.test/acme/repo",
+      "component": "app",
+      "range_mode": "adoption",
+      "boundary": "c",
+      "policy_path": ".semver-trust/policy.toml",
+      "policy_digest": "sha256:policy-adoption-b",
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "verification_profile": "release-time@v1",
+      "clock_profile": "injected-rfc3339@v1",
+      "mandatory_meta_paths": [".github/workflows/semver-trust.yml"]
+    },
+    "bootstrap-unauthenticated": {
+      "authenticated": false,
+      "repository": "https://example.test/acme/repo",
+      "component": "app",
+      "range_mode": "inception",
+      "boundary": null,
+      "policy_path": ".semver-trust/policy.toml",
+      "policy_digest": "sha256:policy-a",
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "verification_profile": "release-time@v1",
+      "clock_profile": "injected-rfc3339@v1",
+      "mandatory_meta_paths": [".github/workflows/semver-trust.yml"]
+    },
+    "bootstrap-swapped-roles": {
+      "authenticated": true,
+      "repository": "https://example.test/acme/repo",
+      "component": "app",
+      "range_mode": "inception",
+      "boundary": null,
+      "policy_path": ".semver-trust/policy.toml",
+      "policy_digest": "sha256:policy-a",
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/attesters",
+        "attestation_signers": ".semver-trust/humans"
+      },
+      "verification_profile": "release-time@v1",
+      "clock_profile": "injected-rfc3339@v1",
+      "mandatory_meta_paths": [".github/workflows/semver-trust.yml"]
+    }
+  },
+  "predecessors": {
+    "predecessor-a": {
+      "accepted": true,
+      "chain_head": true,
+      "repository": "https://example.test/acme/repo",
+      "component": "app",
+      "policy_path": ".semver-trust/policy.toml",
+      "policy_digest": "sha256:policy-a",
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "verification_profile": "release-time@v1",
+      "clock_profile": "injected-rfc3339@v1",
+      "mandatory_meta_paths": [".github/workflows/semver-trust.yml"]
+    },
+    "predecessor-adoption-b": {
+      "accepted": true,
+      "chain_head": true,
+      "repository": "https://example.test/acme/repo",
+      "component": "app",
+      "policy_path": ".semver-trust/policy.toml",
+      "policy_digest": "sha256:policy-adoption-b",
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "verification_profile": "release-time@v1",
+      "clock_profile": "injected-rfc3339@v1",
+      "mandatory_meta_paths": [".github/workflows/semver-trust.yml"]
+    },
+    "predecessor-policy-mismatch": {
+      "accepted": true,
+      "chain_head": true,
+      "repository": "https://example.test/acme/repo",
+      "component": "app",
+      "policy_path": ".semver-trust/policy.toml",
+      "policy_digest": "sha256:other-policy",
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "verification_profile": "release-time@v1",
+      "clock_profile": "injected-rfc3339@v1",
+      "mandatory_meta_paths": [".github/workflows/semver-trust.yml"]
+    },
+    "predecessor-not-head": {
+      "accepted": true,
+      "chain_head": false,
+      "repository": "https://example.test/acme/repo",
+      "component": "app",
+      "policy_path": ".semver-trust/policy.toml",
+      "policy_digest": "sha256:policy-a",
+      "trust_material": {
+        ".semver-trust/humans": "sha256:humans-a",
+        ".semver-trust/attesters": "sha256:attesters-a"
+      },
+      "trust_roles": {
+        "commit_human_signers": ".semver-trust/humans",
+        "attestation_signers": ".semver-trust/attesters"
+      },
+      "verification_profile": "release-time@v1",
+      "clock_profile": "injected-rfc3339@v1",
+      "mandatory_meta_paths": [".github/workflows/semver-trust.yml"]
+    }
+  },
+  "vectors": [
+    {
+      "id": "policy/bootstrap/inception-valid",
+      "kind": "policy_transition",
+      "description": "Pinned bootstrap policy and trust material govern the complete first interval.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "bootstrap",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "inception",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": "bootstrap-a",
+        "predecessor": null,
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "root", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml", ".semver-trust/humans", ".semver-trust/attesters"] }
+        ]
+      },
+      "expected": { "outcome": "verified", "reason": null, "evaluated_policy": "sha256:policy-a", "activated_policy": "sha256:policy-a" }
+    },
+    {
+      "id": "policy/bootstrap/adoption-valid",
+      "kind": "policy_transition",
+      "description": "The bootstrap descriptor, not the candidate policy alone, pins adoption boundary b; this is also the v0.1-to-v0.4 migration shape when b is the last trusted v0.1 TO.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "bootstrap",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "adoption",
+        "boundary": "b",
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-adoption-b",
+        "candidate_policy": "policy-adoption-b",
+        "bootstrap": "bootstrap-adoption-b",
+        "predecessor": null,
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "b", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml"] }
+        ]
+      },
+      "expected": { "outcome": "verified", "reason": null, "evaluated_policy": "sha256:policy-adoption-b", "activated_policy": "sha256:policy-adoption-b" }
+    },
+    {
+      "id": "policy/bootstrap/rejects-missing-descriptor",
+      "kind": "policy_transition",
+      "description": "Repository-controlled policy is not its own genesis trust anchor.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "bootstrap",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "inception",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": null,
+        "predecessor": null,
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": []
+      },
+      "expected": { "outcome": "verification_failed", "reason": "bootstrap_missing", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/bootstrap/rejects-policy-mismatch",
+      "kind": "policy_transition",
+      "description": "The policy at TO must match the out-of-band bootstrap digest.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "bootstrap",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "inception",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": "bootstrap-bad-policy",
+        "predecessor": null,
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": []
+      },
+      "expected": { "outcome": "verification_failed", "reason": "bootstrap_policy_mismatch", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/bootstrap/rejects-unauthenticated-descriptor",
+      "kind": "policy_transition",
+      "description": "A descriptor copied from candidate-controlled storage is not an out-of-band trust anchor.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "bootstrap",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "inception",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": "bootstrap-unauthenticated",
+        "predecessor": null,
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": []
+      },
+      "expected": { "outcome": "verification_failed", "reason": "bootstrap_unauthenticated", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/bootstrap/rejects-boundary-mismatch",
+      "kind": "policy_transition",
+      "description": "A candidate/caller boundary cannot differ from bootstrap chain genesis.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "bootstrap",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "adoption",
+        "boundary": "b",
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-adoption-b",
+        "candidate_policy": "policy-adoption-b",
+        "bootstrap": "bootstrap-wrong-boundary",
+        "predecessor": null,
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": []
+      },
+      "expected": { "outcome": "verification_failed", "reason": "bootstrap_boundary_mismatch", "evaluated_policy": "sha256:policy-adoption-b", "activated_policy": null }
+    },
+    {
+      "id": "policy/bootstrap/rejects-trust-role-mismatch",
+      "kind": "policy_transition",
+      "description": "Matching key bytes cannot be reassigned from commit identity to attestation authority by swapping their roles.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "bootstrap",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "inception",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": "bootstrap-swapped-roles",
+        "predecessor": null,
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": []
+      },
+      "expected": { "outcome": "verification_failed", "reason": "bootstrap_trust_roles_mismatch", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/bootstrap/rejects-clock-profile-mismatch",
+      "kind": "policy_transition",
+      "description": "A caller cannot replace the bootstrap-pinned injected-clock profile with ambient system time.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "bootstrap",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "inception",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "system-clock@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": "bootstrap-a",
+        "predecessor": null,
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": []
+      },
+      "expected": { "outcome": "verification_failed", "reason": "bootstrap_clock_profile_mismatch", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/bootstrap/rejects-missing-verification-time",
+      "kind": "policy_transition",
+      "description": "A pinned clock profile still requires an explicit reproducible verification instant.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "bootstrap",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "inception",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": null,
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": "bootstrap-a",
+        "predecessor": null,
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": []
+      },
+      "expected": { "outcome": "verification_failed", "reason": "verification_time_missing_or_invalid", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/unchanged-valid",
+      "kind": "policy_transition",
+      "description": "The accepted predecessor binds policy-a, which remains active and is reactivated unchanged.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "source", "signer": "alice", "level": "T2", "paths": ["src/app.go"] }
+        ]
+      },
+      "expected": { "outcome": "verified", "reason": null, "evaluated_policy": "sha256:policy-a", "activated_policy": "sha256:policy-a" }
+    },
+    {
+      "id": "policy/recurring/key-rotation-activates-next",
+      "kind": "policy_transition",
+      "description": "Old signer alice authorizes new registries; candidate-only signers become usable only after acceptance.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-rotation",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "rotate", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml", ".semver-trust/humans-v2", ".semver-trust/attesters-v2"] }
+        ]
+      },
+      "expected": { "outcome": "verified", "reason": null, "evaluated_policy": "sha256:policy-a", "activated_policy": "sha256:policy-rotation" }
+    },
+    {
+      "id": "policy/recurring/rejects-candidate-key-self-enrollment",
+      "kind": "policy_transition",
+      "description": "Carol is candidate-authorized but unknown to the active policy and cannot sign her enrollment.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-rotation",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "self-enroll", "signer": "carol", "level": "T3", "paths": [".semver-trust/policy.toml"] }
+        ]
+      },
+      "expected": { "outcome": "verification_failed", "reason": "unknown_active_signer", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/active-meta-level-governs",
+      "kind": "policy_transition",
+      "description": "A T2 policy change fails while active policy-a requires T3, regardless of candidate scope changes.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-scope-b",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "policy-change", "signer": "alice", "level": "T2", "paths": [".semver-trust/policy.toml"] }
+        ]
+      },
+      "expected": { "outcome": "verification_failed", "reason": "under_level_meta_commit", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/rejects-lowered-meta-level",
+      "kind": "policy_transition",
+      "description": "Even a T3 transition cannot lower the candidate's protocol meta floor in-band.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-lowered",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "lower", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml"] }
+        ]
+      },
+      "expected": { "outcome": "verification_failed", "reason": "candidate_meta_level_lowered", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/rejects-uncovered-mandatory-paths",
+      "kind": "policy_transition",
+      "description": "A candidate cannot stop protecting its policy and repository-local trust material.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-uncovered",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "unprotect", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml"] }
+        ]
+      },
+      "expected": { "outcome": "verification_failed", "reason": "candidate_mandatory_meta_uncovered", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/rejects-removed-mandatory-workflow",
+      "kind": "policy_transition",
+      "description": "A candidate cannot stop protecting an attestation workflow pinned by chain authority.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-workflow-uncovered",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "unprotect-workflow", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml"] }
+        ]
+      },
+      "expected": { "outcome": "verification_failed", "reason": "candidate_authority_meta_uncovered", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/rejects-boundary-move",
+      "kind": "policy_transition",
+      "description": "A legacy policy mirror cannot move immutable bootstrap boundary b to c.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": "b",
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-adoption-b",
+        "candidate_policy": "policy-boundary-c",
+        "bootstrap": null,
+        "predecessor": "predecessor-adoption-b",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "move-boundary", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml"] }
+        ]
+      },
+      "expected": { "outcome": "verification_failed", "reason": "adoption_boundary_changed", "evaluated_policy": "sha256:policy-adoption-b", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/adoption-mirror-may-be-absent",
+      "kind": "policy_transition",
+      "description": "The immutable chain boundary remains b even when the candidate omits the optional legacy policy mirror.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": "b",
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-adoption-b",
+        "candidate_policy": "policy-adoption-no-mirror",
+        "bootstrap": null,
+        "predecessor": "predecessor-adoption-b",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "remove-legacy-mirror", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml"] }
+        ]
+      },
+      "expected": { "outcome": "verified", "reason": null, "evaluated_policy": "sha256:policy-adoption-b", "activated_policy": "sha256:policy-adoption-no-mirror" }
+    },
+    {
+      "id": "policy/recurring/scope-change-activates-next",
+      "kind": "policy_transition",
+      "description": "A valid T3 scope change is accepted but policy-a still evaluates this interval.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-scope-b",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "scope-change", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml"] },
+          { "id": "source", "signer": "alice", "level": "T2", "paths": ["src/new-scope/file.go"] }
+        ]
+      },
+      "expected": { "outcome": "verified", "reason": null, "evaluated_policy": "sha256:policy-a", "activated_policy": "sha256:policy-scope-b" }
+    },
+    {
+      "id": "policy/recurring/rejects-ambient-trust-override",
+      "kind": "policy_transition",
+      "description": "An explicitly supplied registry is a locator, not authority; its digest must match the predecessor.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:attacker-registry",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": []
+      },
+      "expected": { "outcome": "verification_failed", "reason": "trust_material_mismatch", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/rejects-predecessor-policy-mismatch",
+      "kind": "policy_transition",
+      "description": "The active policy bytes must match the predecessor's bound digest.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": null,
+        "predecessor": "predecessor-policy-mismatch",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": []
+      },
+      "expected": { "outcome": "verification_failed", "reason": "predecessor_policy_mismatch", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/rejects-non-head-predecessor",
+      "kind": "policy_transition",
+      "description": "An older accepted attestation cannot select stale policy state.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-a",
+        "bootstrap": null,
+        "predecessor": "predecessor-not-head",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": []
+      },
+      "expected": { "outcome": "verification_failed", "reason": "predecessor_not_chain_head", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/new-trust-path-uses-active-meta-level",
+      "kind": "policy_transition",
+      "description": "Candidate trust material is in the current union meta set and cannot be introduced at T2.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-rotation",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "policy", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml"] },
+          { "id": "new-key", "signer": "alice", "level": "T2", "paths": [".semver-trust/humans-v2"] }
+        ]
+      },
+      "expected": { "outcome": "verification_failed", "reason": "under_level_meta_commit", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/rejects-policy-path-move",
+      "kind": "policy_transition",
+      "description": "Moving the chain policy path requires a new out-of-band bootstrap.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-moved-path",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "move", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml", ".trust/policy.toml"] }
+        ]
+      },
+      "expected": { "outcome": "verification_failed", "reason": "candidate_policy_path_changed", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    },
+    {
+      "id": "policy/recurring/intermediate-policy-never-activates",
+      "kind": "policy_transition",
+      "description": "Every policy-path commit in one interval is judged at the predecessor's active T3 level.",
+      "spec": "§5.4",
+      "inputs": {
+        "authority": "predecessor",
+        "repository": "https://example.test/acme/repo",
+        "component": "app",
+        "range_mode": "recurring",
+        "boundary": null,
+        "verification_profile": "release-time@v1",
+        "clock_profile": "injected-rfc3339@v1",
+        "verification_time": "2026-01-01T00:00:00Z",
+        "active_policy": "policy-a",
+        "candidate_policy": "policy-scope-b",
+        "bootstrap": null,
+        "predecessor": "predecessor-a",
+        "provided_trust_material": {
+          ".semver-trust/humans": "sha256:humans-a",
+          ".semver-trust/attesters": "sha256:attesters-a"
+        },
+        "commits": [
+          { "id": "intermediate", "signer": "alice", "level": "T2", "paths": [".semver-trust/policy.toml"] },
+          { "id": "final", "signer": "alice", "level": "T3", "paths": [".semver-trust/policy.toml"] }
+        ]
+      },
+      "expected": { "outcome": "verification_failed", "reason": "under_level_meta_commit", "evaluated_policy": "sha256:policy-a", "activated_policy": null }
+    }
+  ]
+}
