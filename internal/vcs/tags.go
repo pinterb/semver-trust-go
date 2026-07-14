@@ -88,14 +88,22 @@ func TagRefs(path string) (map[string]PeeledRef, error) {
 	out := map[string]PeeledRef{}
 	err = refs.ForEach(func(ref *plumbing.Reference) error {
 		refOID := ref.Hash()
-		commitOID := refOID
-		// An annotated tag resolves to a tag object; peel it to the commit it
-		// wraps. A lightweight tag has no tag object (ErrTagNotFound) and points
-		// straight at the commit.
+		var commitOID plumbing.Hash
 		if tagObj, err := r.TagObject(refOID); err == nil {
+			// Annotated tag: peel through the tag object to the commit it wraps.
 			c, err := tagObj.Commit()
 			if err != nil {
 				return fmt.Errorf("tag refs: peeling annotated tag %q: %w", ref.Name().Short(), err)
+			}
+			commitOID = c.Hash
+		} else {
+			// Lightweight tag, or a ref updated to point directly at an object.
+			// It MUST resolve to a commit: fail closed on a blob/tree/missing
+			// target rather than manufacturing a commit identity, since this
+			// feeds the authenticated §7.5 version-ancestry ref-set.
+			c, err := r.CommitObject(refOID)
+			if err != nil {
+				return fmt.Errorf("tag refs: tag %q does not resolve to a commit: %w", ref.Name().Short(), err)
 			}
 			commitOID = c.Hash
 		}

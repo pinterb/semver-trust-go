@@ -3,7 +3,9 @@
 package vcs
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -187,6 +189,23 @@ func TestTagRefsEmptyAndError(t *testing.T) {
 	}
 	if _, err := TagRefs(t.TempDir()); err == nil {
 		t.Error("expected an error opening a non-repository directory")
+	}
+}
+
+// TestTagRefsFailsClosedOnNonCommitTag proves the adapter never manufactures a
+// commit identity for a tag ref that points at a non-commit object: a
+// lightweight tag updated to a blob hash must abort, not report the blob as the
+// peeled CommitOID (it feeds the authenticated §7.5 ref-set).
+func TestTagRefsFailsClosedOnNonCommitTag(t *testing.T) {
+	repo := buildGraphRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, "blob.txt"), []byte("not a commit"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	blob := gitCmd(t, repo, "hash-object", "-w", "blob.txt")
+	gitCmd(t, repo, "update-ref", "refs/tags/v1.2.3", blob)
+
+	if _, err := TagRefs(repo); err == nil {
+		t.Fatal("expected TagRefs to fail closed on a tag ref pointing at a blob, got nil")
 	}
 }
 
