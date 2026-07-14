@@ -95,7 +95,7 @@ type TransitionInputs struct {
 // verifies). A faithful port of the conformance oracle's _policy_transition;
 // the production verifier feeds it real policy state (tracked in
 // semver-trust-go#76).
-func SelectPolicyTransition(active, candidate MetaPolicy, authority string, bootstrap *BootstrapDescriptor, predecessor *PredecessorPolicy, in TransitionInputs) (evaluated, activated, reason string) {
+func SelectPolicyTransition(active, candidate MetaPolicy, bootstrap *BootstrapDescriptor, predecessor *PredecessorPolicy, in TransitionInputs) (evaluated, activated, reason string) {
 	fail := func(r string) (string, string, string) { return active.Digest, "", r }
 
 	if !trustRolesValid(active.TrustMaterial, active.TrustRoles) {
@@ -106,7 +106,7 @@ func SelectPolicyTransition(active, candidate MetaPolicy, authority string, boot
 	}
 
 	var mandatoryMetaPaths []string
-	switch authority {
+	switch in.Authority {
 	case "bootstrap":
 		b := bootstrap
 		if b == nil {

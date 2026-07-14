@@ -51,7 +51,7 @@ func TestConformancePolicyTransition(t *testing.T) {
 				ti.Commits = append(ti.Commits, TransitionCommit{Signer: c.Signer, Level: c.Level, Paths: c.Paths})
 			}
 
-			evaluated, activated, reason := SelectPolicyTransition(active, candidate, in.Authority, bootstrap, predecessor, ti)
+			evaluated, activated, reason := SelectPolicyTransition(active, candidate, bootstrap, predecessor, ti)
 			outcome := "verified"
 			if reason != "" {
 				outcome = "verification_failed"

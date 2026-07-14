@@ -48,10 +48,10 @@ func ptValidPredecessor() *PredecessorPolicy {
 func TestSelectPolicyTransitionOracleSurface(t *testing.T) {
 	// Base sanity: a valid bootstrap transition and a valid predecessor
 	// transition both verify.
-	if _, act, reason := SelectPolicyTransition(ptPolicyState(), ptPolicyState(), "bootstrap", ptValidBootstrap(), nil, ptBaseInputs("bootstrap")); reason != "" || act != "sha256:pa" {
+	if _, act, reason := SelectPolicyTransition(ptPolicyState(), ptPolicyState(), ptValidBootstrap(), nil, ptBaseInputs("bootstrap")); reason != "" || act != "sha256:pa" {
 		t.Fatalf("valid bootstrap = %q/%q, want activated sha256:pa/none", act, reason)
 	}
-	if _, act, reason := SelectPolicyTransition(ptPolicyState(), ptPolicyState(), "predecessor", nil, ptValidPredecessor(), ptBaseInputs("predecessor")); reason != "" || act != "sha256:pa" {
+	if _, act, reason := SelectPolicyTransition(ptPolicyState(), ptPolicyState(), nil, ptValidPredecessor(), ptBaseInputs("predecessor")); reason != "" || act != "sha256:pa" {
 		t.Fatalf("valid predecessor = %q/%q, want activated sha256:pa/none", act, reason)
 	}
 
@@ -64,7 +64,7 @@ func TestSelectPolicyTransitionOracleSurface(t *testing.T) {
 		return func() string {
 			a, c, b, in := ptPolicyState(), ptPolicyState(), ptValidBootstrap(), ptBaseInputs("bootstrap")
 			mut(&a, &c, b, &in)
-			_, _, r := SelectPolicyTransition(a, c, in.Authority, b, nil, in)
+			_, _, r := SelectPolicyTransition(a, c, b, nil, in)
 			return r
 		}
 	}
@@ -72,7 +72,7 @@ func TestSelectPolicyTransitionOracleSurface(t *testing.T) {
 		return func() string {
 			a, c, p, in := ptPolicyState(), ptPolicyState(), ptValidPredecessor(), ptBaseInputs("predecessor")
 			mut(&a, &c, p, &in)
-			_, _, r := SelectPolicyTransition(a, c, in.Authority, nil, p, in)
+			_, _, r := SelectPolicyTransition(a, c, nil, p, in)
 			return r
 		}
 	}
@@ -137,7 +137,7 @@ func TestSelectPolicyTransitionOracleSurface(t *testing.T) {
 
 	// predecessor_missing: predecessor authority with a nil descriptor.
 	t.Run("predecessor missing", func(t *testing.T) {
-		_, _, r := SelectPolicyTransition(ptPolicyState(), ptPolicyState(), "predecessor", nil, nil, ptBaseInputs("predecessor"))
+		_, _, r := SelectPolicyTransition(ptPolicyState(), ptPolicyState(), nil, nil, ptBaseInputs("predecessor"))
 		if r != "predecessor_missing" {
 			t.Errorf("reason = %q, want predecessor_missing", r)
 		}
