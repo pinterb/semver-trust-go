@@ -29,7 +29,7 @@ while the model is adopted incrementally (tracked in
 | policy-transition | §5.4 bootstrap + policy transitions (ADR-028) | **enforced** |
 | version-ancestry | §7.5 authenticated version state (ADR-029) | **enforced** |
 | source-evidence | §8.3 SLSA Source profiles (ADR-035) | **enforced** |
-| publishing-profile | §7.4 ecosystem routing (ADR-034) | pending |
+| publishing-profile | §7.4 ecosystem routing (ADR-034) | **enforced** |
 | predicate-v0.2 | §8.1 release/v0.2 payload validation (ADR-030) | pending |
 
 **What "review-qualification enforced" covers today:** the ADR-031 qualification
@@ -59,6 +59,18 @@ adoption-boundary disclosure become independent authenticated facts, not a
 function of `--from` spelling). The **production** release path still derives
 versions from `FROM`; wiring `SelectVersionAncestry` into it — which is what
 actually closes go#70 — is tracked in #76.
+
+**What "publishing-profile enforced" covers today:** the §7.4/ADR-034
+resolver-routing claim evaluation (`publish.SelectPublishingProfile`) — registry
+routing is never a trust anchor; same-source promotion proves artifact equality
+only under a reproducible-build profile with matching digests; and each
+ecosystem's default resolution (go module query, npm `latest` dist-tag, cargo
+default dependency, pypi rc projection) must hide or defer a trust pre-release
+rather than serve it as an ordinary install. It is a claim-constraint gate over
+abstract resolver facts: it decides whether a routing/promotion claim is
+*permitted*, not how a real registry resolves. PyPI projection is deferred by
+design (the profile only rejects a non-injective rc collision). No production
+path feeds it real registry state; wiring is tracked in #76.
 
 **What "source-evidence enforced" covers today:** the §8.3/ADR-035
 source-evidence profile evaluation (`source.SelectSourceEvidence`) — repository/

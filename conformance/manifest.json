@@ -16,6 +16,7 @@
     "policy-transition.json": "sha256:77591b3034de1828ed3e5093162afc7ee1130b2e13ae7842ddee32fe248818cf",
     "version-ancestry.json": "sha256:b3930c87908fa80a247bb1cecfb47be7483afbf57e4dc0113c5a4eadb629cd7b",
     "source-evidence.json": "sha256:ce08d767d24e62d4b9de56e51c2669792a4e9ca0d6dfa1cda1af4b76459e381c",
+    "publishing-profile.json": "sha256:f3f0d30b61906abacc10a6f9d10b23b66b61602e829b5d1e510657af50116e27",
     "LICENSE": "sha256:c95bae1d1ce0235ecccd3560b772ec1efb97f348a79f0fbe0a634f0c2ccefe2c",
     "crypto/allowed_signers": "sha256:12eb6da1715c0eac4e93f602a299d8581008894d619c80024a177e09220c1c02",
     "crypto/build-fixture-repos.sh": "sha256:4cc404ef6c895663708d9a0f9c877fdeea6d1bf6ac0e72205e8ad06b9f611402",

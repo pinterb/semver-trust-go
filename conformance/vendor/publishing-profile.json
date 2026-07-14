@@ -1,0 +1,160 @@
+{
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "spec_version": "0.10",
+  "description": "Adversarial ecosystem publishing profile vectors for SemVer-Trust draft v0.10 (§7.4). These test registry projection and resolver-routing claims from raw ecosystem facts; registry routing is never attestation verification.",
+  "vectors": [
+    {
+      "id": "publishing/go/native-prerelease-with-release-hidden",
+      "kind": "publishing_profile",
+      "spec": "§7.4, ADR-034",
+      "description": "Go module version queries prefer a release version over a trust prerelease when both exist for the module path.",
+      "inputs": {
+        "ecosystem": "go",
+        "claim": "default_query_hides_trust_prerelease",
+        "registry_versions": ["1.4.0", "1.4.1-t1.1"],
+        "ordinary_install_intended": false,
+        "attestation_verified": true
+      },
+      "expected": { "accepted": true, "reason": null }
+    },
+    {
+      "id": "publishing/go/rejects-hidden-claim-with-only-prerelease",
+      "kind": "publishing_profile",
+      "spec": "§7.4, ADR-034",
+      "description": "Go latest can select the highest prerelease when no release version exists, so a universal default-hidden claim is false.",
+      "inputs": {
+        "ecosystem": "go",
+        "claim": "default_query_hides_trust_prerelease",
+        "registry_versions": ["0.1.0-t1.1"],
+        "ordinary_install_intended": false,
+        "attestation_verified": true
+      },
+      "expected": { "accepted": false, "reason": "go_latest_prerelease_fallback" }
+    },
+    {
+      "id": "publishing/npm/valid-nonlatest-dist-tag",
+      "kind": "publishing_profile",
+      "spec": "§7.4, ADR-034",
+      "description": "An npm trust prerelease may be published under an explicit opt-in dist-tag while latest remains a release version.",
+      "inputs": {
+        "ecosystem": "npm",
+        "claim": "ordinary_install_avoids_trust_prerelease",
+        "registry_versions": ["1.4.0", "1.4.1-t1.1"],
+        "dist_tags": { "latest": "1.4.0", "trust-t1": "1.4.1-t1.1" },
+        "ordinary_install_intended": false,
+        "attestation_verified": true
+      },
+      "expected": { "accepted": true, "reason": null }
+    },
+    {
+      "id": "publishing/npm/rejects-latest-dist-tag-trust-prerelease",
+      "kind": "publishing_profile",
+      "spec": "§7.4, ADR-034",
+      "description": "npm publication must not leave a trust prerelease on latest unless ordinary installation is intended.",
+      "inputs": {
+        "ecosystem": "npm",
+        "claim": "ordinary_install_avoids_trust_prerelease",
+        "registry_versions": ["1.4.0", "1.4.1-t1.1"],
+        "dist_tags": { "latest": "1.4.1-t1.1" },
+        "ordinary_install_intended": false,
+        "attestation_verified": true
+      },
+      "expected": { "accepted": false, "reason": "npm_latest_trust_prerelease" }
+    },
+    {
+      "id": "publishing/cargo/native-prerelease-explicit-only",
+      "kind": "publishing_profile",
+      "spec": "§7.4, ADR-034",
+      "description": "Cargo native prereleases are acceptable when the routing claim is explicit opt-in rather than default dependency selection.",
+      "inputs": {
+        "ecosystem": "cargo",
+        "claim": "default_dependency_avoids_trust_prerelease",
+        "registry_versions": ["1.4.0", "1.4.1-t2.1"],
+        "ordinary_install_intended": false,
+        "attestation_verified": true
+      },
+      "expected": { "accepted": true, "reason": null }
+    },
+    {
+      "id": "publishing/pypi/rejects-baseline-projection",
+      "kind": "publishing_profile",
+      "spec": "§7.4, ADR-034",
+      "description": "The portable baseline defines no PyPI projection for SemVer-Trust trust prereleases.",
+      "inputs": {
+        "ecosystem": "pypi",
+        "claim": "publish_trust_prerelease_projection",
+        "registry_versions": ["1.4.0rc1"],
+        "projected_from": ["v1.4.0-t1.1"],
+        "ordinary_install_intended": false,
+        "attestation_verified": true
+      },
+      "expected": { "accepted": false, "reason": "pypi_projection_deferred" }
+    },
+    {
+      "id": "publishing/pypi/rejects-rc-collision",
+      "kind": "publishing_profile",
+      "spec": "§7.4, ADR-034",
+      "description": "The rejected PyPI rc<iteration> mapping collides because trust-level iteration restarts per level.",
+      "inputs": {
+        "ecosystem": "pypi",
+        "claim": "publish_trust_prerelease_projection",
+        "registry_versions": ["1.4.0rc1"],
+        "projected_from": ["v1.4.0-t0.1", "v1.4.0-t2.1"],
+        "ordinary_install_intended": false,
+        "attestation_verified": true
+      },
+      "expected": { "accepted": false, "reason": "non_injective_projection" }
+    },
+    {
+      "id": "publishing/registry/rejects-routing-as-trust-anchor",
+      "kind": "publishing_profile",
+      "spec": "§7.4, §8.2, ADR-034",
+      "description": "Registry routing facts alone cannot establish a SemVer-Trust claim; the accepted release attestation remains the authority.",
+      "inputs": {
+        "ecosystem": "npm",
+        "claim": "registry_routing_establishes_trust",
+        "registry_versions": ["1.4.1-t2.1"],
+        "dist_tags": { "trust-t2": "1.4.1-t2.1" },
+        "ordinary_install_intended": false,
+        "attestation_verified": false
+      },
+      "expected": { "accepted": false, "reason": "registry_not_authority" }
+    },
+    {
+      "id": "publishing/promotion/source-identity-without-artifact-equality",
+      "kind": "publishing_profile",
+      "spec": "§7.3, §7.4, ADR-009, ADR-034",
+      "description": "Same-source promotion may publish a different registry artifact digest when no reproducible-build profile is claimed.",
+      "inputs": {
+        "ecosystem": "npm",
+        "claim": "same_source_promotion",
+        "source_revision": "cccccccccccccccccccccccccccccccccccccccc",
+        "promoted_source_revision": "cccccccccccccccccccccccccccccccccccccccc",
+        "artifact_digest": "sha256:aaaaaaaa",
+        "promoted_artifact_digest": "sha256:bbbbbbbb",
+        "reproducible_build_profile": null,
+        "ordinary_install_intended": false,
+        "attestation_verified": true
+      },
+      "expected": { "accepted": true, "reason": null }
+    },
+    {
+      "id": "publishing/promotion/rejects-artifact-equality-without-profile",
+      "kind": "publishing_profile",
+      "spec": "§7.3, §7.4, ADR-009, ADR-034",
+      "description": "A promotion cannot claim artifact-digest equality from same-source identity alone.",
+      "inputs": {
+        "ecosystem": "npm",
+        "claim": "same_source_promotion_proves_artifact_equality",
+        "source_revision": "cccccccccccccccccccccccccccccccccccccccc",
+        "promoted_source_revision": "cccccccccccccccccccccccccccccccccccccccc",
+        "artifact_digest": "sha256:aaaaaaaa",
+        "promoted_artifact_digest": "sha256:bbbbbbbb",
+        "reproducible_build_profile": null,
+        "ordinary_install_intended": false,
+        "attestation_verified": true
+      },
+      "expected": { "accepted": false, "reason": "artifact_equality_unproven" }
+    }
+  ]
+}
