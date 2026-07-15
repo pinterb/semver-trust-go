@@ -3,10 +3,12 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/semver-trust/semver-trust-go/internal/chain"
 	"github.com/semver-trust/semver-trust-go/internal/verify"
 )
 
@@ -15,16 +17,17 @@ import (
 // emit) belong to `release` (GO-042).
 func newVerifyCmd() *cobra.Command {
 	var (
-		repoPath           string
-		from               string
-		to                 string
-		policyPath         string
-		allowedSigners     string
-		attestationSigners string
-		gpgKeyring         string
-		component          string
-		verifyTime         string
-		jsonOut            bool
+		repoPath            string
+		from                string
+		to                  string
+		policyPath          string
+		allowedSigners      string
+		attestationSigners  string
+		gpgKeyring          string
+		component           string
+		verifyTime          string
+		bootstrapDescriptor string
+		jsonOut             bool
 	)
 
 	cmd := &cobra.Command{
@@ -60,6 +63,15 @@ the verifier.`,
 				at = parsed
 			}
 
+			var descriptor *chain.BootstrapDescriptor
+			if bootstrapDescriptor != "" {
+				d, derr := chain.LoadBootstrapDescriptor(bootstrapDescriptor, repoPath)
+				if derr != nil {
+					return fmt.Errorf("verify refused: %w", derr)
+				}
+				descriptor = d
+			}
+
 			report, err := verify.Verify(verify.Options{
 				RepoPath:               repoPath,
 				From:                   from,
@@ -70,6 +82,7 @@ the verifier.`,
 				GPGKeyringPath:         gpgKeyring,
 				Component:              component,
 				VerifyTime:             at,
+				Bootstrap:              descriptor,
 			})
 			if err != nil {
 				return err
@@ -92,6 +105,7 @@ the verifier.`,
 	f.StringVar(&gpgKeyring, "gpg-keyring", "", "armored OpenPGP public keyring for GPG-signed commits; overrides the policy. Empty resolves [identity.human] gpg_keyring from TO's tree (§9); if the policy declares none either, the GPG key family is unverifiable and fails closed")
 	f.StringVar(&component, "component", "", "workspace component to headline; empty = single/root component")
 	f.StringVar(&verifyTime, "verify-time", "", "verification instant (RFC3339); empty = now at the CLI boundary")
+	f.StringVar(&bootstrapDescriptor, "bootstrap-descriptor", "", "out-of-band v0.10 bootstrap descriptor (§5.2/§5.4, ADR-027/028); when supplied, the release interval is the authenticated exact interval (inception root..TO, or adoption including the boundary) rather than FROM..TO. Must be supplied from outside the repository")
 	f.BoolVar(&jsonOut, "json", false, "emit a structured JSON report instead of the human table")
 	return cmd
 }

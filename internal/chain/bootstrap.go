@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/semver-trust/semver-trust-go/internal/vcs"
 	"github.com/semver-trust/semver-trust-go/internal/version"
 )
 
@@ -175,6 +176,21 @@ func (d *BootstrapDescriptor) versionPredecessor() (present, null, ambiguous boo
 			return true, false, false, nil, fmt.Errorf("bootstrap descriptor: version_predecessor: %w", err)
 		}
 		return true, false, false, &version.Binding{Tag: b.Tag, RefOID: b.RefOID, CommitOID: b.CommitOID}, nil
+	}
+}
+
+// IntervalBoundary maps the descriptor's adoption boundary to the §5.2/ADR-027
+// interval boundary (vcs.BoundaryDescriptor) SelectInterval consumes. It returns
+// nil for an inception descriptor (no boundary). The boundary is bootstrap-pinned
+// by construction — it came from the authenticated out-of-band descriptor.
+func (d *BootstrapDescriptor) IntervalBoundary() *vcs.BoundaryDescriptor {
+	if d.Boundary == nil {
+		return nil
+	}
+	return &vcs.BoundaryDescriptor{
+		OID:             d.Boundary.OID,
+		RefTarget:       d.Boundary.RefTarget,
+		BootstrapPinned: true,
 	}
 }
 

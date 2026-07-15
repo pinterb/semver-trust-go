@@ -9,6 +9,7 @@ import (
 
 	"github.com/semver-trust/semver-trust-go/conformance"
 	"github.com/semver-trust/semver-trust-go/internal/attest"
+	"github.com/semver-trust/semver-trust-go/internal/chain"
 	"github.com/semver-trust/semver-trust-go/internal/policy"
 	"github.com/semver-trust/semver-trust-go/internal/trust"
 	"github.com/semver-trust/semver-trust-go/internal/vcs"
@@ -54,18 +55,25 @@ type Options struct {
 	// VerifyTime is the verification instant (§10, ADR-018), injected from the
 	// CLI boundary.
 	VerifyTime time.Time
+	// Bootstrap is the authenticated out-of-band bootstrap descriptor
+	// (§5.4/§7.5, ADR-028/029). When non-nil the run is in v0.10 mode: step-2
+	// enumeration uses the ADR-027 exact interval (vcs.SelectInterval) instead
+	// of the two-dot FROM..TO walk, and From is not consulted for the version
+	// line. It is loaded and authenticated at the CLI boundary. Nil = the v0.3
+	// FROM / policy-boundary path, unchanged.
+	Bootstrap *chain.BootstrapDescriptor
 }
 
 // The §10 step labels an AbortError names. The abort reason the CLI prints to
 // stderr carries one of these, so a failure is traceable to the algorithm.
 const (
-	stepLoadPolicy   = "§10 step 1 (load policy)"
-	stepMetaPath     = "§10 step 1 (§5.4 meta-path level)"
-	stepEnumerate    = "§10 step 2 (enumerate commits)"
-	stepSignature    = "§10 step 3 (verify signature)"
-	stepAttestation  = "§10 step 3 (verify review attestation)"
-	stepDerivation   = "§10 step 4 (derivation proof)"
-	stepPropagate    = "§10 step 6 (propagate)"
+	stepLoadPolicy  = "§10 step 1 (load policy)"
+	stepMetaPath    = "§10 step 1 (§5.4 meta-path level)"
+	stepEnumerate   = "§10 step 2 (enumerate commits)"
+	stepSignature   = "§10 step 3 (verify signature)"
+	stepAttestation = "§10 step 3 (verify review attestation)"
+	stepDerivation  = "§10 step 4 (derivation proof)"
+	stepPropagate   = "§10 step 6 (propagate)"
 )
 
 // AbortError is a verification abort: a fail-closed stop naming the §10 step
@@ -146,31 +154,43 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 	// levels, no scopes — exempt history makes no claim (never T0, ADR-008).
 	// An explicit FROM makes the boundary irrelevant: ranges anchored at a
 	// previous verified tag are unaffected.
-	from := opts.From
-	if from == "" && pol.AdoptionBoundary != "" {
-		boundarySHA, err := commitHash(repo, pol.AdoptionBoundary)
-		if err != nil {
-			return nil, abort(stepEnumerate, fmt.Errorf(
-				"adoption boundary %q declared in policy ([policy] adoption_boundary, ADR-026) does not resolve: %w",
-				pol.AdoptionBoundary, err))
+	var commits []vcs.RangeCommit
+	if opts.Bootstrap != nil {
+		// v0.10 mode: the exact ADR-027 interval from the authenticated
+		// descriptor. The adoption boundary is INCLUDED and itself verified
+		// (earliest verifiable commit, not last legacy release); From is not a
+		// range anchor here (a caller FROM is refused by SelectInterval).
+		commits, err = enumerateInterval(repo, opts, report)
+	} else {
+		from := opts.From
+		if from == "" && pol.AdoptionBoundary != "" {
+			boundarySHA, cerr := commitHash(repo, pol.AdoptionBoundary)
+			if cerr != nil {
+				return nil, abort(stepEnumerate, fmt.Errorf(
+					"adoption boundary %q declared in policy ([policy] adoption_boundary, ADR-026) does not resolve: %w",
+					pol.AdoptionBoundary, cerr))
+			}
+			from = pol.AdoptionBoundary
+			// Disclosure (ADR-026): "verified since the boundary" is a different
+			// claim from "verified since inception" and must never be conflated —
+			// the report marks the boundary in both renderings.
+			report.From = pol.AdoptionBoundary
+			report.FromIsAdoptionBoundary = true
+			report.AdoptionBoundary = boundarySHA
 		}
-		from = pol.AdoptionBoundary
-		// Disclosure (ADR-026): "verified since the boundary" is a different
-		// claim from "verified since inception" and must never be conflated —
-		// the report marks the boundary in both renderings.
-		report.From = pol.AdoptionBoundary
-		report.FromIsAdoptionBoundary = true
-		report.AdoptionBoundary = boundarySHA
-	}
-	commits, err := vcs.Range(repo, from, opts.To)
-	if err != nil {
-		if report.FromIsAdoptionBoundary {
+		commits, err = vcs.Range(repo, from, opts.To)
+		if err != nil && report.FromIsAdoptionBoundary {
 			// vcs.Range enforces FROM-is-an-ancestor-of-TO (§10.2); name the
 			// boundary's policy provenance so the abort is traceable.
 			err = fmt.Errorf("adoption boundary %q declared in policy ([policy] adoption_boundary, ADR-026): %w",
 				pol.AdoptionBoundary, err)
 		}
-		return nil, abort(stepEnumerate, err)
+		if err != nil {
+			err = abort(stepEnumerate, err)
+		}
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	// ---- §10 step 3: verify each commit end-to-end and classify. -----------
@@ -264,6 +284,52 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 	}
 
 	return report, nil
+}
+
+// enumerateInterval selects the §5.2/ADR-027 exact release interval from the
+// authenticated bootstrap descriptor (v0.10 mode) and materializes it as
+// RangeCommits for classification. Genesis only — inception or adoption; the
+// descriptor's own validate rejects any other mode, and a recurring interval
+// needs an accepted-predecessor chain head that only v0.2 emission provides
+// (#76 M6). A caller-selected From is refused by SelectInterval (untrusted_from):
+// in v0.10 the interval is authenticated, not caller-anchored.
+func enumerateInterval(repo string, opts Options, report *Report) ([]vcs.RangeCommit, error) {
+	desc := opts.Bootstrap
+	graph, err := vcs.CommitGraph(repo, opts.To)
+	if err != nil {
+		return nil, abort(stepEnumerate, err)
+	}
+	in := vcs.IntervalInputs{
+		Repository:         desc.Repository,
+		Component:          desc.Component,
+		Mode:               vcs.IntervalMode(desc.IntervalMode),
+		To:                 report.ToCommit,
+		ExistingChainHeads: 0, // genesis; recurring defers to #76 M6
+		Boundary:           desc.IntervalBoundary(),
+		Commits:            graph,
+	}
+	if opts.From != "" {
+		f := opts.From
+		in.RequestedFrom = &f
+	}
+	ids, reason := vcs.SelectInterval(in)
+	if reason != "" {
+		return nil, abort(stepEnumerate, fmt.Errorf(
+			"authenticated release interval refused (%s, §5.2/ADR-027)", reason))
+	}
+	commits, err := vcs.IntervalCommits(repo, ids)
+	if err != nil {
+		return nil, abort(stepEnumerate, err)
+	}
+	// Disclosure: an adoption interval is anchored at a bootstrap-pinned boundary
+	// that is itself INCLUDED and verified (ADR-027/028 — earliest verifiable
+	// commit, not last legacy release).
+	if desc.Boundary != nil {
+		report.From = desc.Boundary.OID
+		report.FromIsAdoptionBoundary = true
+		report.AdoptionBoundary = desc.Boundary.OID
+	}
+	return commits, nil
 }
 
 // resolveHumanSigners loads the human allowed-signers registry: the filesystem

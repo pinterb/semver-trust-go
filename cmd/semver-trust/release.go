@@ -107,6 +107,16 @@ prints the would-be tag and attestation without writing anything.`,
 			if bootstrapDescriptor != "" && cmd.Flags().Changed("iteration") {
 				return errors.New("release refused: --iteration is not consulted with --bootstrap-descriptor; the iteration is authenticated by the version ancestry (§7.5/ADR-029)")
 			}
+			// Load the out-of-band descriptor once (the v0.10 opt-in): it
+			// governs both the exact ADR-027 interval (verify step 2) and the
+			// §7.5 version line (step 8).
+			var desc *chain.BootstrapDescriptor
+			if bootstrapDescriptor != "" {
+				desc, err = chain.LoadBootstrapDescriptor(bootstrapDescriptor, repoPath)
+				if err != nil {
+					return fmt.Errorf("release refused: %w", err)
+				}
+			}
 
 			// Signing material resolves before any evaluation so a missing
 			// key fails fast, not after a half-done pipeline. --dry-run
@@ -141,6 +151,7 @@ prints the would-be tag and attestation without writing anything.`,
 				GPGKeyringPath:         gpgKeyring,
 				Component:              component,
 				VerifyTime:             at,
+				Bootstrap:              desc,
 			})
 			if err != nil {
 				return fmt.Errorf("release refused: %w", err)
@@ -155,11 +166,7 @@ prints the would-be tag and attestation without writing anything.`,
 				comp               verify.ComponentEffective
 				versionPredecessor *string
 			)
-			if bootstrapDescriptor != "" {
-				desc, lerr := chain.LoadBootstrapDescriptor(bootstrapDescriptor, repoPath)
-				if lerr != nil {
-					return fmt.Errorf("release refused: %w", lerr)
-				}
+			if desc != nil {
 				decision, comp, versionPredecessor, iteration, err = decideReleaseAncestry(report, desc, repoPath, claimed, blastScore)
 				if err == nil {
 					// Bind the emitted predicate's component to the version

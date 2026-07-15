@@ -41,18 +41,25 @@ func buildAdoptionAncestryRepo(t *testing.T) (repo, legacyCommit, boundaryCommit
 		t.Fatalf("git init: %v\n%s", err, out)
 	}
 
+	// The pre-scheme legacy release (mallory, unverifiable): excluded from the
+	// interval as a parent of the boundary, but the authenticated version
+	// predecessor v1.4.0.
 	commitSignedCLI(t, repo, keys, "unknown-mallory", "mallory@semver-trust.test",
 		"legacy.txt", "legacy v1.4.0 content\n", "chore: legacy release 1.4.0\n\nProvenance: human")
 	gitCLI(t, repo, "tag", "v1.4.0")
 	legacyCommit = gitOut(t, repo, "rev-parse", "v1.4.0")
 
-	commitSignedCLI(t, repo, keys, "unknown-mallory", "mallory@semver-trust.test",
-		"pre.txt", "pre-scheme content\n", "feat: pre-scheme change\n\nProvenance: human")
+	// The boundary IS the adopting commit — alice-signed, carrying the trust
+	// material, so under ADR-027 it is included in the interval and itself
+	// verifies (earliest verifiable commit, not last legacy release).
+	commitSignedCLI(t, repo, keys, "human-alice", "alice@semver-trust.test",
+		".semver-trust/policy.toml", adoptionPolicy, "feat: adopt semver-trust (ADR-026)\n\nProvenance: human")
 	gitCLI(t, repo, "tag", "v0-import")
 	boundaryCommit = gitOut(t, repo, "rev-parse", "v0-import")
 
+	// A post-boundary feat at TO, so the interval is more than the boundary.
 	commitSignedCLI(t, repo, keys, "human-alice", "alice@semver-trust.test",
-		".semver-trust/policy.toml", adoptionPolicy, "feat: adopt semver-trust (ADR-026)\n\nProvenance: human")
+		"widget.go", "package widget\n", "feat: widget core\n\nProvenance: human")
 	return repo, legacyCommit, boundaryCommit
 }
 
@@ -143,6 +150,19 @@ func TestReleaseVersionAncestryContinuesLine(t *testing.T) {
 	if stmt.Predicate.Component != "default" {
 		t.Errorf("predicate component = %q, want %q (the descriptor's component)", stmt.Predicate.Component, "default")
 	}
+
+	// ADR-027: the boundary commit is INCLUDED in the interval and itself
+	// verified; the pre-boundary legacy commit is excluded.
+	classified := map[string]bool{}
+	for _, c := range result.Report.Commits {
+		classified[c.SHA] = true
+	}
+	if !classified[boundaryCommit] {
+		t.Errorf("boundary %s not in the classified interval — ADR-027 includes and verifies it", boundaryCommit[:7])
+	}
+	if classified[legacyCommit] {
+		t.Errorf("pre-boundary legacy %s must be excluded from the interval", legacyCommit[:7])
+	}
 }
 
 // TestReleaseVersionAncestryRejectsIterationOverride confirms a caller-selected
@@ -199,5 +219,140 @@ func TestReleaseVersionAncestryRejectsInRepoDescriptor(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "out-of-band") {
 		t.Errorf("error = %v, want an out-of-band rejection", err)
+	}
+}
+
+const inceptionPolicy = `# semver-trust TEST POLICY - version-ancestry inception repo
+[policy]
+version   = "0.1"
+threshold = "T2"
+strategy  = "demote"
+
+[meta]
+paths          = [".semver-trust/**"]
+required_level = "T2"
+`
+
+// buildInceptionRepo is a greenfield repo adopting the scheme from inception:
+// alice's founding policy commit plus a feature commit, no legacy history and no
+// boundary.
+func buildInceptionRepo(t *testing.T) string {
+	t.Helper()
+	keys := stageVendoredKeys(t)
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "-c", "init.defaultBranch=main", "init", "--quiet", "--object-format=sha1", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	commitSignedCLI(t, repo, keys, "human-alice", "alice@semver-trust.test",
+		".semver-trust/policy.toml", inceptionPolicy, "feat: adopt semver-trust\n\nProvenance: human")
+	commitSignedCLI(t, repo, keys, "human-alice", "alice@semver-trust.test",
+		"widget.go", "package widget\n", "feat: widget core\n\nProvenance: human")
+	return repo
+}
+
+// adoptionDescriptor builds an adoption bootstrap descriptor pinning the given
+// boundary (oid/ref_target) and version predecessor commit.
+func adoptionDescriptor(boundaryOID, boundaryRefTarget, predecessorCommit string) map[string]any {
+	return map[string]any{
+		"repository": "repo:test/widget", "component": "default",
+		"interval_mode":        "adoption",
+		"boundary":             map[string]any{"oid": boundaryOID, "ref_target": boundaryRefTarget},
+		"policy_path":          ".semver-trust/policy.toml",
+		"policy_digest":        "sha256:" + strings.Repeat("a", 64),
+		"verification_profile": "vp", "clock_profile": "cp",
+		"version_predecessor": map[string]any{"tag": "v1.4.0", "ref_oid": predecessorCommit, "commit_oid": predecessorCommit},
+	}
+}
+
+// writeDescriptorFile marshals a descriptor to an out-of-band temp file (never
+// inside the repo) and returns its path.
+func writeDescriptorFile(t *testing.T, descriptor map[string]any) string {
+	t.Helper()
+	descPath := filepath.Join(t.TempDir(), "bootstrap.json")
+	data, err := json.Marshal(descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(descPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return descPath
+}
+
+// TestReleaseVersionAncestryInception cuts a v0.10 inception release: no
+// boundary, an explicit null version predecessor, so the interval is the whole
+// reachable history (root..TO) and the version line starts fresh at v0.1.0.
+func TestReleaseVersionAncestryInception(t *testing.T) {
+	repo := buildInceptionRepo(t)
+	descPath := writeDescriptorFile(t, map[string]any{
+		"repository": "repo:test/widget", "component": "default",
+		"interval_mode":        "inception",
+		"policy_path":          ".semver-trust/policy.toml",
+		"policy_digest":        "sha256:" + strings.Repeat("a", 64),
+		"verification_profile": "vp", "clock_profile": "cp",
+		"version_predecessor": nil, // explicit null: a new version line
+	})
+	out, err := runCommand(t, "release",
+		"--repo", repo, "--to", "main",
+		"--allowed-signers", allowedSignersPath(t),
+		"--bootstrap-descriptor", descPath,
+		"--claimed-bump", "minor", "--blast", "low",
+		"--verify-time", releaseEpoch, "--dry-run", "--json")
+	if err != nil {
+		t.Fatalf("release: %v\n%s", err, out)
+	}
+	var result releaseResultJSON
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Channel != "clean" || result.Tag != "v0.1.0" {
+		t.Errorf("inception decision = channel %s tag %s; want clean v0.1.0 (fresh line)", result.Channel, result.Tag)
+	}
+	if result.VersionPredecessor != nil {
+		t.Errorf("version_predecessor = %v, want none (null predecessor)", *result.VersionPredecessor)
+	}
+	if len(result.Report.Commits) != 2 {
+		t.Errorf("inception interval classified %d commits, want 2 (root..TO)", len(result.Report.Commits))
+	}
+}
+
+// TestReleaseVersionAncestryRejectsCallerFrom confirms a caller-selected --from
+// is refused in v0.10 genesis mode: the interval is authenticated, not
+// caller-anchored (SelectInterval returns untrusted_from).
+func TestReleaseVersionAncestryRejectsCallerFrom(t *testing.T) {
+	repo, legacyCommit, boundaryCommit := buildAdoptionAncestryRepo(t)
+	descPath := writeDescriptorFile(t, adoptionDescriptor(boundaryCommit, boundaryCommit, legacyCommit))
+	out, err := runCommand(t, "release",
+		"--repo", repo, "--to", "main",
+		"--allowed-signers", allowedSignersPath(t),
+		"--bootstrap-descriptor", descPath,
+		"--from", "v0-import",
+		"--claimed-bump", "minor", "--blast", "low",
+		"--verify-time", releaseEpoch, "--dry-run", "--json")
+	if err == nil {
+		t.Fatalf("expected refusal for a caller --from in v0.10 mode, got:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "untrusted_from") {
+		t.Errorf("error = %v, want untrusted_from", err)
+	}
+}
+
+// TestReleaseVersionAncestryRejectsMovedBoundary confirms an adoption boundary
+// whose ref no longer resolves to its pinned OID is refused (boundary_ref_moved).
+func TestReleaseVersionAncestryRejectsMovedBoundary(t *testing.T) {
+	repo, legacyCommit, boundaryCommit := buildAdoptionAncestryRepo(t)
+	// ref_target != oid: the pinned boundary ref has moved.
+	descPath := writeDescriptorFile(t, adoptionDescriptor(boundaryCommit, legacyCommit, legacyCommit))
+	out, err := runCommand(t, "release",
+		"--repo", repo, "--to", "main",
+		"--allowed-signers", allowedSignersPath(t),
+		"--bootstrap-descriptor", descPath,
+		"--claimed-bump", "minor", "--blast", "low",
+		"--verify-time", releaseEpoch, "--dry-run", "--json")
+	if err == nil {
+		t.Fatalf("expected refusal for a moved boundary ref, got:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "boundary_ref_moved") {
+		t.Errorf("error = %v, want boundary_ref_moved", err)
 	}
 }
