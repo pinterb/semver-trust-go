@@ -178,3 +178,20 @@ func principal(e *openpgp.Entity) string {
 	}
 	return ident.Name
 }
+
+// Principals returns the primary-identity principal of every key in the keyring,
+// de-duplicated in keyring order. Each value is exactly the principal Verify
+// returns for a signature by that key — so callers enumerating authorized
+// signers (§5.4 policy transition) match what commit verification produces.
+func (k *Keyring) Principals() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, e := range k.entities {
+		p := principal(e)
+		if !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}

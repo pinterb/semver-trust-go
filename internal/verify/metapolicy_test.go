@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/semver-trust/semver-trust-go/internal/pgp/pgptest"
 	"github.com/semver-trust/semver-trust-go/internal/policy"
 )
 
@@ -27,7 +28,14 @@ func TestMetaPolicyFromTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const gpgKeyring = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nplaceholder-hashed-only\n-----END PGP PUBLIC KEY BLOCK-----\n"
+	gpgSigner, err := pgptest.NewSigner("GPG Signer", "gpg@semver-trust.test", pinnedEpoch, 0)
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+	gpgKeyring, err := pgptest.ArmoredKeyring(gpgSigner)
+	if err != nil {
+		t.Fatalf("ArmoredKeyring: %v", err)
+	}
 	const attSigners = "attester@semver-trust.test ssh-ed25519 AAAAplaceholderhashedonly\n"
 
 	policyTOML := `[policy]
@@ -49,7 +57,7 @@ gpg_keyring     = ".semver-trust/gpg-keyring.asc"
 	repo, rev := repoWithTreeFiles(t, map[string]string{
 		".semver-trust/policy.toml":         policyTOML,
 		".semver-trust/allowed_signers":     string(allowedSigners),
-		".semver-trust/gpg-keyring.asc":     gpgKeyring,
+		".semver-trust/gpg-keyring.asc":     string(gpgKeyring),
 		".semver-trust/attestation_signers": attSigners,
 	})
 	pol, err := policy.Parse([]byte(policyTOML))
@@ -73,7 +81,7 @@ gpg_keyring     = ".semver-trust/gpg-keyring.asc"
 
 	wantMaterial := map[string]string{
 		".semver-trust/allowed_signers":     wantSHA256(allowedSigners),
-		".semver-trust/gpg-keyring.asc":     wantSHA256([]byte(gpgKeyring)),
+		".semver-trust/gpg-keyring.asc":     wantSHA256(gpgKeyring),
 		".semver-trust/attestation_signers": wantSHA256([]byte(attSigners)),
 	}
 	if !reflect.DeepEqual(mp.TrustMaterial, wantMaterial) {
@@ -102,8 +110,67 @@ gpg_keyring     = ".semver-trust/gpg-keyring.asc"
 		t.Errorf("roles↔material is not a bijection: role values %v vs material keys %v", roleVals, matKeys)
 	}
 
-	if len(mp.AuthorizedSigners) == 0 {
-		t.Error("no authorized signers extracted from the allowed-signers registry")
+	// AuthorizedSigners spans both trust families: the SSH allowed-signers
+	// principals AND the GPG keyring principal.
+	if !contains(mp.AuthorizedSigners, "gpg@semver-trust.test") {
+		t.Errorf("authorized signers %v missing the GPG keyring principal", mp.AuthorizedSigners)
+	}
+	if len(mp.AuthorizedSigners) < 2 {
+		t.Errorf("authorized signers = %v, want SSH principals + the GPG principal", mp.AuthorizedSigners)
+	}
+}
+
+func contains(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
+}
+
+// TestMetaPolicyFromTreeGPGOnly is the go#96 regression: a policy whose only
+// trust material is a GPG keyring must still populate AuthorizedSigners from the
+// keyring, or the transition would reject its own valid GPG-signed commits as
+// unknown_active_signer.
+func TestMetaPolicyFromTreeGPGOnly(t *testing.T) {
+	gpgSigner, err := pgptest.NewSigner("GPG Signer", "gpg-signer@semver-trust.test", pinnedEpoch, 0)
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+	armored, err := pgptest.ArmoredKeyring(gpgSigner)
+	if err != nil {
+		t.Fatalf("ArmoredKeyring: %v", err)
+	}
+	policyTOML := `[policy]
+version   = "0.1"
+threshold = "T2"
+strategy  = "demote"
+
+[meta]
+paths          = [".semver-trust/**"]
+required_level = "T2"
+
+[identity.human]
+gpg_keyring = ".semver-trust/gpg-keyring.asc"
+`
+	repo, rev := repoWithTreeFiles(t, map[string]string{
+		".semver-trust/policy.toml":     policyTOML,
+		".semver-trust/gpg-keyring.asc": string(armored),
+	})
+	pol, err := policy.Parse([]byte(policyTOML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mp, err := MetaPolicyFromTree(pol, ".semver-trust/policy.toml", repo, rev)
+	if err != nil {
+		t.Fatalf("MetaPolicyFromTree: %v", err)
+	}
+	if !contains(mp.AuthorizedSigners, "gpg-signer@semver-trust.test") {
+		t.Errorf("GPG-only authorized signers = %v, want the keyring principal", mp.AuthorizedSigners)
+	}
+	if mp.TrustRoles[RoleHumanGPG] != ".semver-trust/gpg-keyring.asc" {
+		t.Errorf("gpg role = %v", mp.TrustRoles)
 	}
 }
 

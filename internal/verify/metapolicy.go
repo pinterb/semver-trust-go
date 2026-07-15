@@ -68,6 +68,18 @@ func MetaPolicyFromTree(pol *policy.Policy, policyPath, repoPath, rev string) (p
 	mp.TrustMaterial = trustMaterial
 	mp.TrustRoles = trustRoles
 
+	// AuthorizedSigners are the commit-signer principals of every trust family
+	// the verifier accepts — SSH allowed-signers AND the OpenPGP keyring — each
+	// matching the principal VerifyCommitSignature returns, so the transition's
+	// unknown_active_signer gate never rejects a valid commit. A GPG-only policy
+	// must still populate its signers (go#96 review).
+	seen := map[string]bool{}
+	add := func(principal string) {
+		if !seen[principal] {
+			seen[principal] = true
+			mp.AuthorizedSigners = append(mp.AuthorizedSigners, principal)
+		}
+	}
 	if p := pol.Identity.Human.AllowedSigners; p != "" {
 		data, err := readTreeFile(repoPath, rev, p)
 		if err != nil {
@@ -77,14 +89,23 @@ func MetaPolicyFromTree(pol *policy.Policy, policyPath, repoPath, rev string) (p
 		if err != nil {
 			return policy.MetaPolicy{}, fmt.Errorf("meta-policy: allowed-signers %q: %w", p, err)
 		}
-		seen := map[string]bool{}
 		for _, s := range allowed {
 			for _, principal := range s.Principals {
-				if !seen[principal] {
-					seen[principal] = true
-					mp.AuthorizedSigners = append(mp.AuthorizedSigners, principal)
-				}
+				add(principal)
 			}
+		}
+	}
+	if p := pol.Identity.Human.GPGKeyring; p != "" {
+		data, err := readTreeFile(repoPath, rev, p)
+		if err != nil {
+			return policy.MetaPolicy{}, fmt.Errorf("meta-policy: gpg keyring %q: %w", p, err)
+		}
+		keyring, err := vcs.ParsePGPKeyring(data)
+		if err != nil {
+			return policy.MetaPolicy{}, fmt.Errorf("meta-policy: gpg keyring %q: %w", p, err)
+		}
+		for _, principal := range keyring.Principals() {
+			add(principal)
 		}
 	}
 	return mp, nil

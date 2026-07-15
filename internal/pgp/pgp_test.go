@@ -210,3 +210,35 @@ func TestParseKeyringRejectsEmpty(t *testing.T) {
 		t.Error("ParseKeyring accepted an empty keyring")
 	}
 }
+
+// TestKeyringPrincipals enumerates the keyring's identities as the same
+// principals Verify returns, de-duplicated in keyring order.
+func TestKeyringPrincipals(t *testing.T) {
+	alice := newSigner(t, "alice@semver-trust.test", epoch, 0)
+	bob := newSigner(t, "bob@semver-trust.test", epoch, 0)
+	kr := keyring(t, alice, bob)
+
+	got := kr.Principals()
+	want := []string{"alice@semver-trust.test", "bob@semver-trust.test"}
+	if len(got) != len(want) {
+		t.Fatalf("principals = %v, want %v", got, want)
+	}
+	set := map[string]bool{}
+	for _, p := range got {
+		set[p] = true
+	}
+	for _, w := range want {
+		if !set[w] {
+			t.Errorf("principals %v missing %q", got, w)
+		}
+	}
+	// The value must equal what Verify returns for a signature by that key.
+	payload := []byte("payload")
+	verified, err := Verify(payload, sign(t, alice, payload, epoch), kr, epoch)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if !set[verified.Principal] {
+		t.Errorf("Verify principal %q not in enumerated principals %v", verified.Principal, got)
+	}
+}
