@@ -131,7 +131,6 @@ func TestReleaseVersionAncestryContinuesLine(t *testing.T) {
 	out, err := runCommand(t, "release",
 		"--repo", repo,
 		"--to", "main",
-		"--allowed-signers", allowedSignersPath(t),
 		"--bootstrap-descriptor", descPath,
 		"--claimed-bump", "minor",
 		"--blast", "low",
@@ -191,7 +190,6 @@ func TestReleaseVersionAncestryRejectsIterationOverride(t *testing.T) {
 	descPath := writeDescriptorFile(t, adoptionDescriptor(t, repo, boundaryCommit, boundaryCommit, legacyCommit))
 	out, err := runCommand(t, "release",
 		"--repo", repo, "--to", "main",
-		"--allowed-signers", allowedSignersPath(t),
 		"--bootstrap-descriptor", descPath,
 		"--claimed-bump", "minor", "--blast", "low",
 		"--iteration", "9",
@@ -215,7 +213,6 @@ func TestReleaseVersionAncestryRejectsInRepoDescriptor(t *testing.T) {
 	}
 	out, err := runCommand(t, "release",
 		"--repo", repo, "--to", "main",
-		"--allowed-signers", allowedSignersPath(t),
 		"--bootstrap-descriptor", inRepo,
 		"--claimed-bump", "minor", "--blast", "low",
 		"--verify-time", releaseEpoch, "--dry-run", "--json")
@@ -336,7 +333,6 @@ func TestReleaseVersionAncestryInception(t *testing.T) {
 	descPath := writeDescriptorFile(t, inceptionDescriptor(t, repo))
 	out, err := runCommand(t, "release",
 		"--repo", repo, "--to", "main",
-		"--allowed-signers", allowedSignersPath(t),
 		"--bootstrap-descriptor", descPath,
 		"--claimed-bump", "minor", "--blast", "low",
 		"--verify-time", releaseEpoch, "--dry-run", "--json")
@@ -366,7 +362,6 @@ func TestReleaseVersionAncestryRejectsCallerFrom(t *testing.T) {
 	descPath := writeDescriptorFile(t, adoptionDescriptor(t, repo, boundaryCommit, boundaryCommit, legacyCommit))
 	out, err := runCommand(t, "release",
 		"--repo", repo, "--to", "main",
-		"--allowed-signers", allowedSignersPath(t),
 		"--bootstrap-descriptor", descPath,
 		"--from", "v0-import",
 		"--claimed-bump", "minor", "--blast", "low",
@@ -387,7 +382,6 @@ func TestReleaseVersionAncestryRejectsMovedBoundary(t *testing.T) {
 	descPath := writeDescriptorFile(t, adoptionDescriptor(t, repo, boundaryCommit, legacyCommit, legacyCommit))
 	out, err := runCommand(t, "release",
 		"--repo", repo, "--to", "main",
-		"--allowed-signers", allowedSignersPath(t),
 		"--bootstrap-descriptor", descPath,
 		"--claimed-bump", "minor", "--blast", "low",
 		"--verify-time", releaseEpoch, "--dry-run", "--json")
@@ -410,7 +404,6 @@ func TestVerifyVersionAncestryRejectsComponentMismatch(t *testing.T) {
 	descPath := writeDescriptorFile(t, desc)
 	out, err := runCommand(t, "verify",
 		"--repo", repo, "--to", "main",
-		"--allowed-signers", allowedSignersPath(t),
 		"--bootstrap-descriptor", descPath,
 		"--verify-time", releaseEpoch, "--json")
 	if err == nil {
@@ -431,7 +424,6 @@ func TestReleaseVersionAncestryRejectsPolicyDigestMismatch(t *testing.T) {
 	descPath := writeDescriptorFile(t, desc)
 	out, err := runCommand(t, "release",
 		"--repo", repo, "--to", "main",
-		"--allowed-signers", allowedSignersPath(t),
 		"--bootstrap-descriptor", descPath,
 		"--claimed-bump", "minor", "--blast", "low",
 		"--verify-time", releaseEpoch, "--dry-run", "--json")
@@ -455,7 +447,6 @@ func TestReleaseVersionAncestryRejectsTrustMaterialMismatch(t *testing.T) {
 	descPath := writeDescriptorFile(t, desc)
 	out, err := runCommand(t, "release",
 		"--repo", repo, "--to", "main",
-		"--allowed-signers", allowedSignersPath(t),
 		"--bootstrap-descriptor", descPath,
 		"--claimed-bump", "minor", "--blast", "low",
 		"--verify-time", releaseEpoch, "--dry-run", "--json")
@@ -464,5 +455,27 @@ func TestReleaseVersionAncestryRejectsTrustMaterialMismatch(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "bootstrap_trust_material_mismatch") {
 		t.Errorf("error = %v, want bootstrap_trust_material_mismatch", err)
+	}
+}
+
+// TestVerifyVersionAncestryRejectsTrustMaterialOverride closes the go#97 bypass:
+// in v0.10 mode a filesystem --allowed-signers override would let unpinned
+// material verify commits while the transition only checks the descriptor-pinned
+// tree bytes (key substitution under an authorized principal). The override is
+// refused fail-fast, so the material used for verification IS what the descriptor
+// pins.
+func TestVerifyVersionAncestryRejectsTrustMaterialOverride(t *testing.T) {
+	repo, legacyCommit, boundaryCommit := buildAdoptionAncestryRepo(t)
+	descPath := writeDescriptorFile(t, adoptionDescriptor(t, repo, boundaryCommit, boundaryCommit, legacyCommit))
+	out, err := runCommand(t, "verify",
+		"--repo", repo, "--to", "main",
+		"--bootstrap-descriptor", descPath,
+		"--allowed-signers", allowedSignersPath(t),
+		"--verify-time", releaseEpoch, "--json")
+	if err == nil {
+		t.Fatalf("expected verify to reject a trust-material override in v0.10 mode, got:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "overrides the descriptor-pinned trust material") {
+		t.Errorf("error = %v, want a trust-material override rejection", err)
 	}
 }
