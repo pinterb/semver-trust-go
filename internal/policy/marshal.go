@@ -48,6 +48,17 @@ func (p *Policy) Marshal() ([]byte, error) {
 	if p.Identity.AttestationSigners != "" {
 		identity.AttestationSigners = &p.Identity.AttestationSigners
 	}
+	// The canonical-actor map is the root-of-trust vocabulary for qualified
+	// review (ADR-031); it must survive Parse(Marshal(p)) like every other
+	// field. Emit it only when declared so a policy with no actors marshals
+	// back to nil Actors (rawActor mirrors Actor field-for-field).
+	if len(p.Identity.Actors) > 0 {
+		actors := make(map[string]rawActor, len(p.Identity.Actors))
+		for id, a := range p.Identity.Actors {
+			actors[id] = rawActor(a)
+		}
+		identity.Actor = actors
+	}
 
 	raw := rawPolicy{
 		Policy: header,

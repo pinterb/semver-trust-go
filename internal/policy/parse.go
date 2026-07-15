@@ -57,6 +57,9 @@ type rawDerivation struct {
 type rawIdentity struct {
 	Human rawHumanIdentity `toml:"human"`
 	Agent rawAgentIdentity `toml:"agent"`
+	// Actor is the §9 canonical-actor map, keyed by actor id (a data key, the
+	// [evidence.<eco>] pattern). Absent means the policy declares no actors.
+	Actor map[string]rawActor `toml:"actor"`
 	// AttestationSigners is a pointer for the same reason as AdoptionBoundary:
 	// `attestation_signers = ""` is a rejected declaration, not an absent one
 	// (§9, ADR-022). It sits under [identity], not [identity.human] — review
@@ -77,6 +80,11 @@ type rawAgentIdentity struct {
 	OIDCIssuers     []string `toml:"oidc_issuers"`
 	SubjectPatterns []string `toml:"subject_patterns"`
 	BotAccounts     []string `toml:"bot_accounts"`
+}
+type rawActor struct {
+	Class       string   `toml:"class"`
+	Credentials []string `toml:"credentials"`
+	Accounts    []string `toml:"accounts"`
 }
 
 type rawTrailers struct {
@@ -207,8 +215,53 @@ func parseIdentity(raw rawIdentity, p *Policy) error {
 		id.AttestationSigners = *raw.AttestationSigners
 	}
 
+	actors, err := parseActors(raw.Actor)
+	if err != nil {
+		return err
+	}
+	id.Actors = actors
+
 	p.Identity = id
 	return nil
+}
+
+// parseActors validates the §4.2/§9 canonical-actor map: each actor has a
+// human/agent class and at least one credential or account, and — the
+// load-bearing §9 invariant — no credential or platform account appears under
+// more than one actor (else the verifier could not tell which actor a credential
+// counts as).
+func parseActors(raw map[string]rawActor) (map[string]Actor, error) {
+	if len(raw) == 0 {
+		return nil, nil // no actor map declared — leave Identity.Actors nil
+	}
+	actors := make(map[string]Actor, len(raw))
+	seenCred := map[string]string{}
+	seenAcct := map[string]string{}
+	for actorID, a := range raw {
+		if actorID == "" {
+			return nil, fmt.Errorf("policy: identity.actor id must be non-empty")
+		}
+		if a.Class != "human" && a.Class != "agent" {
+			return nil, fmt.Errorf("policy: identity.actor.%s class %q must be \"human\" or \"agent\" (§4.2)", actorID, a.Class)
+		}
+		if len(a.Credentials) == 0 && len(a.Accounts) == 0 {
+			return nil, fmt.Errorf("policy: identity.actor.%s must declare at least one credential or account (§9)", actorID)
+		}
+		for _, c := range a.Credentials {
+			if prior, ok := seenCred[c]; ok {
+				return nil, fmt.Errorf("policy: credential %q maps to both identity.actor.%s and identity.actor.%s (a credential maps to exactly one actor, §9)", c, prior, actorID)
+			}
+			seenCred[c] = actorID
+		}
+		for _, acct := range a.Accounts {
+			if prior, ok := seenAcct[acct]; ok {
+				return nil, fmt.Errorf("policy: account %q maps to both identity.actor.%s and identity.actor.%s (an account maps to exactly one actor, §9)", acct, prior, actorID)
+			}
+			seenAcct[acct] = actorID
+		}
+		actors[actorID] = Actor(a)
+	}
+	return actors, nil
 }
 
 // parseScopes validates the [scopes] table by hand: its keys are path globs

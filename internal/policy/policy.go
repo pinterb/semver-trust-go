@@ -155,6 +155,13 @@ type Identity struct {
 	Human HumanIdentity
 	Agent AgentIdentity
 
+	// Actors is the §4.2/§9 canonical-actor map, keyed by actor id (ADR-031).
+	// It maps signing credentials and platform review accounts to the accountable
+	// people/agents §3.2 counts, collapsing key rotations and aliases. Empty when
+	// the policy declares no [identity.actor.<id>] tables — the verifier then
+	// keeps the raw-identity review path (qualified review is actor-map-gated).
+	Actors map[string]Actor
+
 	// AttestationSigners is the optional in-tree path to the SSH
 	// allowed-signers registry of keys trusted to sign review and release
 	// attestations (SSHSIG over the DSSE PAE, §4.3, §8.2, ADR-022). It lives
@@ -187,6 +194,41 @@ type AgentIdentity struct {
 	OIDCIssuers     []string
 	SubjectPatterns []string
 	BotAccounts     []string
+}
+
+// Actor is a canonical accountable identity (§4.2/§9, ADR-031): the stable
+// policy-bound identity for one person or agent after mapping credentials,
+// platform accounts, aliases, and key rotations. Class ("human" or "agent") is
+// the class §3.2 counts. Credentials are signing-credential identity strings
+// (e.g. an SSH key fingerprint or an OIDC subject); Accounts are platform
+// review-account identifiers. Multiple credentials under one actor are aliases
+// or key rotation — not multiple accountable people.
+type Actor struct {
+	Class       string
+	Credentials []string
+	Accounts    []string
+}
+
+// ResolveActor maps a signing-credential or platform-account identity to its
+// canonical actor id and class (§4.2/§9). ok is false when the identity is not
+// bound by any actor — the verifier MUST treat an unmapped credential needed to
+// classify a protected-branch commit or a counted review as unverifiable
+// (fail closed). The one-actor-per-credential invariant is enforced at parse,
+// so the first match is the only match.
+func (p *Policy) ResolveActor(identity string) (actorID, class string, ok bool) {
+	for id, a := range p.Identity.Actors {
+		for _, c := range a.Credentials {
+			if c == identity {
+				return id, a.Class, true
+			}
+		}
+		for _, acct := range a.Accounts {
+			if acct == identity {
+				return id, a.Class, true
+			}
+		}
+	}
+	return "", "", false
 }
 
 // Evidence configures an ecosystem's evidence providers (§6.1-§6.2).
