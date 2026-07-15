@@ -15,6 +15,7 @@ import (
 	"github.com/semver-trust/semver-trust-go/conformance"
 	"github.com/semver-trust/semver-trust-go/evidence"
 	"github.com/semver-trust/semver-trust-go/internal/attest"
+	"github.com/semver-trust/semver-trust-go/internal/chain"
 	"github.com/semver-trust/semver-trust-go/internal/sshsig"
 	"github.com/semver-trust/semver-trust-go/internal/trust"
 	"github.com/semver-trust/semver-trust-go/internal/vcs"
@@ -30,16 +31,17 @@ import (
 func newReleaseCmd() *cobra.Command {
 	var (
 		// The verify surface, unchanged (steps 1–7 are the same pipeline).
-		repoPath           string
-		from               string
-		to                 string
-		policyPath         string
-		allowedSigners     string
-		attestationSigners string
-		gpgKeyring         string
-		component          string
-		verifyTime         string
-		jsonOut            bool
+		repoPath            string
+		from                string
+		to                  string
+		policyPath          string
+		allowedSigners      string
+		attestationSigners  string
+		gpgKeyring          string
+		component           string
+		verifyTime          string
+		bootstrapDescriptor string
+		jsonOut             bool
 
 		// The release surface (steps 8–9).
 		claimedBump string
@@ -139,7 +141,23 @@ prints the would-be tag and attestation without writing anything.`,
 			}
 
 			// ---- §10 step 8: decide channel and version. -------------------
-			decision, comp, err := decideRelease(report, from, component, claimed, blastScore, iteration)
+			// When an out-of-band bootstrap descriptor is supplied the run is in
+			// v0.10 mode: the version line is authenticated against the real
+			// commit graph via §7.5 ancestry, independent of --from (go#70).
+			var (
+				decision           trust.Decision
+				comp               verify.ComponentEffective
+				versionPredecessor *string
+			)
+			if bootstrapDescriptor != "" {
+				desc, lerr := chain.LoadBootstrapDescriptor(bootstrapDescriptor, repoPath)
+				if lerr != nil {
+					return fmt.Errorf("release refused: %w", lerr)
+				}
+				decision, comp, versionPredecessor, err = decideReleaseAncestry(report, desc, repoPath, component, claimed, blastScore)
+			} else {
+				decision, comp, err = decideRelease(report, from, component, claimed, blastScore, iteration)
+			}
 			if err != nil {
 				return err
 			}
@@ -161,21 +179,23 @@ prints the would-be tag and attestation without writing anything.`,
 			}
 
 			result := releaseResult{
-				DryRun:        dryRun,
-				Channel:       decision.Channel.String(),
-				Version:       decision.Version.String(),
-				Tag:           tagName,
-				ToCommit:      report.ToCommit,
-				Bump:          decision.Bump.String(),
-				ClaimedBump:   claimed.String(),
-				SemanticFloor: report.Evidence.SemanticFloor,
-				Effective:     comp.Effective,
-				Own:           comp.Own,
-				Blast:         blast,
-				Strategy:      report.Policy.Strategy,
-				Iteration:     iteration,
-				PredicateType: attest.PredicateRelease,
-				Report:        report,
+				DryRun:               dryRun,
+				Channel:              decision.Channel.String(),
+				Version:              decision.Version.String(),
+				Tag:                  tagName,
+				ToCommit:             report.ToCommit,
+				Bump:                 decision.Bump.String(),
+				ClaimedBump:          claimed.String(),
+				SemanticFloor:        report.Evidence.SemanticFloor,
+				Effective:            comp.Effective,
+				Own:                  comp.Own,
+				Blast:                blast,
+				Strategy:             report.Policy.Strategy,
+				Iteration:            iteration,
+				VersionAuthenticated: bootstrapDescriptor != "",
+				VersionPredecessor:   versionPredecessor,
+				PredicateType:        attest.PredicateRelease,
+				Report:               report,
 			}
 
 			if dryRun {
@@ -232,6 +252,7 @@ prints the would-be tag and attestation without writing anything.`,
 	f.StringVar(&gpgKeyring, "gpg-keyring", "", "armored OpenPGP public keyring for GPG-signed commits; overrides the policy. Empty resolves [identity.human] gpg_keyring from TO's tree (§9); if the policy declares none either, the GPG key family is unverifiable and fails closed")
 	f.StringVar(&component, "component", "", "component to release (tag prefix and attestation component); empty = the single/root component")
 	f.StringVar(&verifyTime, "verify-time", "", "verification instant (RFC3339); empty = now at the CLI boundary")
+	f.StringVar(&bootstrapDescriptor, "bootstrap-descriptor", "", "out-of-band v0.10 bootstrap descriptor (§5.4/§7.5, ADR-028/029); when supplied, the version line is derived from the authenticated descriptor rather than --from. Must be supplied from outside the repository")
 	f.BoolVar(&jsonOut, "json", false, "emit a structured JSON result instead of the human summary")
 	f.StringVar(&claimedBump, "claimed-bump", "", "the bump this release claims: patch|minor|major (required)")
 	f.StringVar(&blast, "blast", "", "operator-supplied §6.2 blast-radius score: low|moderate|high (required; recorded as operator-supplied in the attestation)")
@@ -338,6 +359,96 @@ func currentVersion(from, component string) (version.Version, error) {
 			"--from component %q conflicts with --component %q", v.Component, component)
 	}
 	return v, nil
+}
+
+// decideReleaseAncestry is the v0.10 decide path (§7.5/ADR-029) used when a
+// bootstrap descriptor supplies the authority. It authenticates the version
+// line against the real commit graph and ref-set via version.SelectVersionAncestry
+// — so a genesis or adoption release continues the authenticated version
+// predecessor's line rather than restarting it, and the predecessor and boundary
+// are facts of the descriptor, not of --from spelling (go#70). It returns the
+// decision, the released component's effective row, and the authenticated version
+// predecessor tag (nil for a descriptor-declared new line). --from and
+// --iteration are not consulted: the descriptor is the version authority, and a
+// genesis iteration is authenticated (always 1).
+func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescriptor, repoPath, component string, claimed evidence.Bump, blast trust.Blast) (trust.Decision, verify.ComponentEffective, *string, error) {
+	fail := func(err error) (trust.Decision, verify.ComponentEffective, *string, error) {
+		return trust.Decision{}, verify.ComponentEffective{}, nil, err
+	}
+	if component != "" && component != desc.Component {
+		return fail(fmt.Errorf("release refused: --component %q conflicts with the bootstrap descriptor component %q", component, desc.Component))
+	}
+	comp, err := targetEffective(report)
+	if err != nil {
+		return fail(err)
+	}
+
+	nodes, err := vcs.CommitGraph(repoPath, report.ToCommit)
+	if err != nil {
+		return fail(err)
+	}
+	graph := make([]version.AncestryCommit, len(nodes))
+	for i, n := range nodes {
+		graph[i] = version.AncestryCommit(n)
+	}
+	peeled, err := vcs.TagRefs(repoPath)
+	if err != nil {
+		return fail(err)
+	}
+	refs := make(map[string]version.RefEntry, len(peeled))
+	for tag, r := range peeled {
+		refs[tag] = version.RefEntry(r)
+	}
+
+	var boundary *string
+	if desc.Boundary != nil {
+		oid := desc.Boundary.OID
+		boundary = &oid
+	}
+	bootstrap := desc.VersionBootstrap()
+	result := version.SelectVersionAncestry(version.AncestryInputs{
+		Authority:    "bootstrap",
+		Action:       "advance",
+		Repository:   desc.Repository,
+		Component:    desc.Component,
+		TagPrefix:    desc.TagPrefix,
+		IntervalMode: desc.IntervalMode,
+		Boundary:     boundary,
+		To:           report.ToCommit,
+		Graph:        graph,
+		Refs:         refs,
+		Decision: version.DecisionInputs{
+			EffectiveTrust:  comp.Effective,
+			Threshold:       report.Policy.Threshold,
+			Blast:           blast.String(),
+			Strategy:        report.Policy.Strategy,
+			DifferAvailable: report.Evidence.DifferAvailable,
+			SemanticFloor:   report.Evidence.SemanticFloor,
+			ClaimedBump:     claimed.String(),
+		},
+		Bootstrap: &bootstrap,
+	})
+	if result.Reason != "" {
+		return fail(fmt.Errorf("release refused: authenticated version ancestry failed (%s, §7.5/ADR-029)", result.Reason))
+	}
+	if result.Version == nil {
+		return fail(errors.New("release refused: version ancestry authenticated but produced no version tag"))
+	}
+	ver, err := version.Parse(*result.Version)
+	if err != nil {
+		return fail(fmt.Errorf("release refused: version ancestry produced an unparseable tag %q: %w", *result.Version, err))
+	}
+	channel := trust.ChannelClean
+	if ver.Trust != nil {
+		channel = trust.ChannelPrerelease
+	}
+	// The semantic floor is honored unconditionally (§6.1); the effective bump
+	// is max(claim, floor). evidence.Bump ranks patch<minor<major by iota.
+	bump := claimed
+	if floor, ferr := evidence.ParseBump(report.Evidence.SemanticFloor); ferr == nil && floor > bump {
+		bump = floor
+	}
+	return trust.Decision{Channel: channel, Bump: bump, Version: ver}, comp, result.VersionPredecessor, nil
 }
 
 // releaseStatementInput maps the verify report and the decision onto the
@@ -479,23 +590,28 @@ func loadSignerFile(path, flag string) (ssh.Signer, error) {
 
 // releaseResult is the release command's output shape, JSON and human.
 type releaseResult struct {
-	DryRun        bool           `json:"dry_run,omitempty"`
-	Channel       string         `json:"channel"`
-	Version       string         `json:"version"`
-	Tag           string         `json:"tag"`
-	ToCommit      string         `json:"to_commit"`
-	Bump          string         `json:"bump"`
-	ClaimedBump   string         `json:"claimed_bump"`
-	SemanticFloor string         `json:"semantic_floor"`
-	Effective     string         `json:"effective"`
-	Own           string         `json:"own"`
-	Blast         string         `json:"blast"`
-	Strategy      string         `json:"strategy"`
-	Iteration     uint64         `json:"iteration"`
-	PredicateType string         `json:"predicate_type"`
-	Signer        string         `json:"attestation_signer,omitempty"`
-	StoredRefs    []string       `json:"stored_refs,omitempty"`
-	Report        *verify.Report `json:"report"`
+	DryRun        bool   `json:"dry_run,omitempty"`
+	Channel       string `json:"channel"`
+	Version       string `json:"version"`
+	Tag           string `json:"tag"`
+	ToCommit      string `json:"to_commit"`
+	Bump          string `json:"bump"`
+	ClaimedBump   string `json:"claimed_bump"`
+	SemanticFloor string `json:"semantic_floor"`
+	Effective     string `json:"effective"`
+	Own           string `json:"own"`
+	Blast         string `json:"blast"`
+	Strategy      string `json:"strategy"`
+	Iteration     uint64 `json:"iteration"`
+	// VersionAuthenticated is true when a bootstrap descriptor governed the
+	// version line (v0.10 mode); VersionPredecessor is the authenticated
+	// predecessor tag it continues from, nil for a descriptor-declared new line.
+	VersionAuthenticated bool           `json:"version_authenticated,omitempty"`
+	VersionPredecessor   *string        `json:"version_predecessor,omitempty"`
+	PredicateType        string         `json:"predicate_type"`
+	Signer               string         `json:"attestation_signer,omitempty"`
+	StoredRefs           []string       `json:"stored_refs,omitempty"`
+	Report               *verify.Report `json:"report"`
 }
 
 // render writes the result: structured JSON under --json, the human summary
@@ -515,6 +631,13 @@ func (r releaseResult) render(cmd *cobra.Command, jsonOut bool, payload []byte) 
 	w.printf("release decision (spec §10 step 8)\n")
 	w.printf("  channel:        %s\n", r.Channel)
 	w.printf("  version:        %s\n", r.Version)
+	if r.VersionAuthenticated {
+		if r.VersionPredecessor != nil {
+			w.printf("  version line:   continues %s (authenticated, §7.5/ADR-029)\n", *r.VersionPredecessor)
+		} else {
+			w.printf("  version line:   new line (authenticated null predecessor, §7.5/ADR-029)\n")
+		}
+	}
 	w.printf("  bump:           %s (claimed %s, semantic floor %s)\n", r.Bump, r.ClaimedBump, r.SemanticFloor)
 	w.printf("  effective:      %s (own %s)\n", r.Effective, r.Own)
 	w.printf("  blast:          %s (operator-supplied)\n", r.Blast)
