@@ -24,24 +24,26 @@ const releaseEpoch = "2026-01-01T00:00:00Z"
 
 // releaseResultJSON mirrors the release --json output shape.
 type releaseResultJSON struct {
-	DryRun        bool            `json:"dry_run"`
-	Channel       string          `json:"channel"`
-	Version       string          `json:"version"`
-	Tag           string          `json:"tag"`
-	ToCommit      string          `json:"to_commit"`
-	Bump          string          `json:"bump"`
-	Effective     string          `json:"effective"`
-	Own           string          `json:"own"`
-	SemanticFloor string          `json:"semantic_floor"`
-	StoredRefs    []string        `json:"stored_refs"`
-	Statement     json.RawMessage `json:"statement"`
-	Report        *verify.Report  `json:"report"`
+	DryRun               bool            `json:"dry_run"`
+	Channel              string          `json:"channel"`
+	Version              string          `json:"version"`
+	Tag                  string          `json:"tag"`
+	ToCommit             string          `json:"to_commit"`
+	Bump                 string          `json:"bump"`
+	Effective            string          `json:"effective"`
+	Own                  string          `json:"own"`
+	SemanticFloor        string          `json:"semantic_floor"`
+	VersionAuthenticated bool            `json:"version_authenticated"`
+	VersionPredecessor   *string         `json:"version_predecessor"`
+	StoredRefs           []string        `json:"stored_refs"`
+	Statement            json.RawMessage `json:"statement"`
+	Report               *verify.Report  `json:"report"`
 }
 
 // releasePayloadJSON is the subset of the §8.1 payload the tests assert on.
 type releasePayloadJSON struct {
-	Type          string `json:"_type"`
-	Subject       []struct {
+	Type    string `json:"_type"`
+	Subject []struct {
 		Name   string            `json:"name"`
 		Digest map[string]string `json:"digest"`
 	} `json:"subject"`
