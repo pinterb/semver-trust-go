@@ -108,6 +108,16 @@ func (r *Report) WriteText(w io.Writer) error {
 	if r.Propagation.Note != "" {
 		e.printf("  note: %s\n", r.Propagation.Note)
 	}
+	if cc := r.CleanChannel; cc != nil {
+		// Informational clean-channel eligibility (§6.2/ADR-032); not a gate.
+		if cc.Met {
+			e.printf("  clean channel: threshold met (effective %s >= threshold %s; §6.4 blast/differ still applies at release)\n",
+				cc.Effective, cc.Threshold)
+		} else {
+			e.printf("  clean channel: below threshold (effective %s < threshold %s) - unavailable regardless of blast/differ (§6.2/ADR-032)\n",
+				cc.Effective, cc.Threshold)
+		}
+	}
 
 	// §10 step 7 — evidence.
 	e.println("\n[§10 step 7] evidence")
