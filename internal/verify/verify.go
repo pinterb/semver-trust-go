@@ -339,6 +339,22 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 		return nil, err
 	}
 
+	// Clean-channel eligibility (§6.2/ADR-032): whether the target component's
+	// effective trust meets the policy threshold. INFORMATIONAL only — ADR-032
+	// places the threshold gate in the release decision (bound for replay), so
+	// verify reports the relationship without gating. No abort here.
+	if comp, ok := targetComponentEffective(report); ok {
+		effective, perr := trust.ParseLevel(comp.Effective)
+		if perr != nil {
+			return nil, perr
+		}
+		report.CleanChannel = &CleanChannelReport{
+			Effective: comp.Effective,
+			Threshold: pol.Threshold.String(),
+			Met:       effective >= pol.Threshold,
+		}
+	}
+
 	return report, nil
 }
 

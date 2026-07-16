@@ -34,6 +34,23 @@ type Report struct {
 	Scopes      []ScopeReport     `json:"scopes"`       // §10 step 5
 	Propagation PropagationReport `json:"propagation"`  // §10 step 6
 	Evidence    EvidenceReport    `json:"evidence"`     // §10 step 7
+	// CleanChannel is the informational §6.2/ADR-032 clean-channel eligibility
+	// of the target component. Nil when no propagation target resolves.
+	CleanChannel *CleanChannelReport `json:"clean_channel,omitempty"`
+}
+
+// CleanChannelReport is the informational §6.2/ADR-032 clean-channel
+// eligibility of the target component's effective trust against the policy
+// threshold. It is NOT a gate: ADR-032 places the threshold gate in the release
+// DECISION (bound into the attestation for deterministic replay), and verify
+// reports the same relationship without aborting on it. Met means the threshold
+// gate alone is satisfied (effective >= threshold); the §6.4 blast/differ table
+// is a separate release-time factor, so Met does not by itself mean a release
+// would be clean.
+type CleanChannelReport struct {
+	Effective string `json:"effective"`
+	Threshold string `json:"threshold"`
+	Met       bool   `json:"met"`
 }
 
 // PolicyReport records the loaded policy and its pinned digest (§10 step 1,
