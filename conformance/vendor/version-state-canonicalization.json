@@ -1,0 +1,64 @@
+{
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "spec_version": "0.10",
+  "description": "Version-state canonicalization vectors (ADR-036, spec/semver-trust.md §8.1). Each carries a carried-forward version-state object and the semver-trust-version-state-json v0.2 digest an emitter MUST produce and a verifier MUST reproduce: RFC 8785 (JSON Canonicalization Scheme) over the object, hashed with SHA-256. The 'expected.digest' is the digestSet bound as a release/v0.2 stateIdentity 'digest'; 'inputs.state.predecessor_state_digest' is the sha256:<hex> string form of the parent state's digest — the tamper-evident hash-chain link.",
+  "vectors": [
+    {
+      "id": "version-state-canonicalization/genesis-advance",
+      "kind": "version_state_canonicalization",
+      "description": "A new version line at genesis (advance): no baseline and a null predecessor-state digest. Establishes the chain head every recurring release extends.",
+      "spec": "ADR-036",
+      "inputs": {
+        "state": {
+          "profile": "semver-trust-version-state-json",
+          "version": "0.2",
+          "component": "auth",
+          "tag_prefix": "auth/",
+          "baseline": null,
+          "baseline_core": "0.0.0",
+          "target_core": "0.1.0",
+          "target_bump": "minor",
+          "clean_accepted": false,
+          "target_lineage": ["interval:auth:inception:1"],
+          "iterations": { "T2": 1 },
+          "pending_corrective_floor": null,
+          "predecessor_state_digest": null
+        }
+      },
+      "expected": {
+        "digest": { "sha256": "4fb3ad49a90ae21dc8044b5dcab5d3f3543fbd156b704776d0096a6e5071ad4f" }
+      }
+    },
+    {
+      "id": "version-state-canonicalization/recurring-advance-chained",
+      "kind": "version_state_canonicalization",
+      "description": "A recurring advance whose predecessor_state_digest is the genesis vector's digest, exercising the hash-chain link and the non-null baseline (immutable lineage tag with raw/peeled OIDs and source identity).",
+      "spec": "ADR-036",
+      "inputs": {
+        "state": {
+          "profile": "semver-trust-version-state-json",
+          "version": "0.2",
+          "component": "auth",
+          "tag_prefix": "auth/",
+          "baseline": {
+            "name": "auth/v0.1.0-t2.1",
+            "raw_ref_oid": "1111111111111111111111111111111111111111",
+            "peeled_commit_oid": "cccccccccccccccccccccccccccccccccccccccc",
+            "source_identity": { "gitCommit": "cccccccccccccccccccccccccccccccccccccccc" }
+          },
+          "baseline_core": "0.1.0",
+          "target_core": "0.2.0",
+          "target_bump": "minor",
+          "clean_accepted": false,
+          "target_lineage": ["interval:auth:recurring:2"],
+          "iterations": { "T2": 1 },
+          "pending_corrective_floor": null,
+          "predecessor_state_digest": "sha256:4fb3ad49a90ae21dc8044b5dcab5d3f3543fbd156b704776d0096a6e5071ad4f"
+        }
+      },
+      "expected": {
+        "digest": { "sha256": "f19fbbd6c3ee325887c5a121f72a2d685576a223a43aaf62d589e0993b1d1763" }
+      }
+    }
+  ]
+}

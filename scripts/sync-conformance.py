@@ -37,6 +37,7 @@ FILES = (
     "version-ancestry.json",
     "source-evidence.json",
     "publishing-profile.json",
+    "version-state-canonicalization.json",
     # release/v0.2 + review/v0.2 predicate instances (ADR-030): the vector
     # index plus the payload files it validates against the vendored v0.2
     # schemas (§8.1). Payloads carry no vectors array, so manifest_test skips

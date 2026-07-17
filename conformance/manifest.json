@@ -3,7 +3,7 @@
   "spec_version": "0.10",
   "source": {
     "repository": "https://github.com/semver-trust/spec",
-    "commit": "894e407a76f746fcf449b36c8a990a5e77c2ce5d"
+    "commit": "58ec2d9a0ac9f34768e444baf93c635d5b0d48dc"
   },
   "files": {
     "levels.json": "sha256:e6a7121f2d2092d189b7bf4f4ea45926a9629067abae8ac64997fc13538fca6c",
@@ -17,6 +17,7 @@
     "version-ancestry.json": "sha256:b3930c87908fa80a247bb1cecfb47be7483afbf57e4dc0113c5a4eadb629cd7b",
     "source-evidence.json": "sha256:ce08d767d24e62d4b9de56e51c2669792a4e9ca0d6dfa1cda1af4b76459e381c",
     "publishing-profile.json": "sha256:f3f0d30b61906abacc10a6f9d10b23b66b61602e829b5d1e510657af50116e27",
+    "version-state-canonicalization.json": "sha256:1f134b6f6f3346f646f0aa68edd02281a089cc7ad0200edfecf3d4f23e15cfff",
     "predicate-v0.2.json": "sha256:522c1ff18782cde66e677ab0dd1cbce4648dde92123971081a922eb7ece13018",
     "predicate-v0.2/release-valid.json": "sha256:75c2d909bd667d5fcd584d077c2514b5a0395a829e74b3d825b2a9cda9de5748",
     "predicate-v0.2/release-valid-source-evidence-extension.json": "sha256:bb582aea20798dbdc195b1b3a5bf386f65b4d89dab634a5c8274d8066daee827",

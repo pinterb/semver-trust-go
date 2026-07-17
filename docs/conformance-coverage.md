@@ -32,6 +32,7 @@ pipeline (tracked in
 | source-evidence | §8.3 SLSA Source profiles (ADR-035) | **enforced** |
 | publishing-profile | §7.4 ecosystem routing (ADR-034) | **enforced** |
 | predicate-v0.2 | §8.1 release/v0.2 payload validation (ADR-030) | **enforced** |
+| version-state-canonicalization | §8.1 version-state digest profile: JCS + SHA-256, hash-chained (ADR-036) | **enforced** |
 
 **What "review-qualification enforced" covers today:** the ADR-031 qualification
 logic (`trust.QualifyReview`) — approved-verdict, active-at-merge, final-revision
