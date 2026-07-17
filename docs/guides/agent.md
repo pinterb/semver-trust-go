@@ -6,6 +6,79 @@ SemVer-Trust. This page is your contract: generic to every such repository,
 written to be loaded into your context and obeyed. The repository you are in
 may add stricter rules of its own — see [the last section](#repository-specific-overrides).
 
+> **Repository authors:** the block in the next section is self-contained —
+> copy it verbatim into your `AGENTS.md` (or the file your `CLAUDE.md` points
+> at) to give agents these rules directly, with no dependency on this page. The
+> sections after it explain the reasoning and the mechanics in full.
+
+## Drop-in contract for your `AGENTS.md` / `CLAUDE.md`
+
+Copy everything between the fences into your repository's agent contract. It is
+complete on its own — it inlines the trailer format and references no other
+file, so an agent that reads only your `AGENTS.md` has everything it needs:
+
+````markdown
+## For AI coding agents: commit provenance rules
+
+This repository verifies commit provenance and human accountability
+cryptographically (SemVer-Trust). Your commit messages are part of that
+evidence — lying in them costs the repository more than honesty ever could.
+When you author a commit here:
+
+1. **Keep commit signing enabled.** Your commits are normally signed by the
+   operator's key; that is correct and records who is accountable for the
+   commit entering history. Never disable signing.
+
+2. **End every commit message with a truthful Provenance trailer** as its final
+   paragraph, authored explicitly on every commit (do not rely on a
+   `.gitmessage` template — `git commit -m`/`-F` bypasses it):
+
+   ```text
+   Provenance: agent
+   Provenance-Agent: <your-tool>/<version>
+   Provenance-Model: <model-identifier>
+   ```
+
+   - Use `Provenance: agent` when you are the sole author; use
+     `Provenance: mixed` (with the same `Provenance-Agent` line) when a human
+     substantially co-authored the change.
+   - **Never** write `Provenance: human`. A `Co-authored-by:` line is
+     corroborating evidence only — it never replaces the `Provenance:` trailer.
+   - `Provenance-Model` is optional but honest; include it when you know it.
+
+   Attach the block inline or with `--trailer`:
+
+   ```sh
+   git commit -m "feat: <subject>" \
+     -m "Provenance: agent
+   Provenance-Agent: <your-tool>/<version>
+   Provenance-Model: <model-identifier>"
+   ```
+
+   If a commit you just authored has a wrong or missing trailer, fix it with
+   `git commit --amend` **before pushing** (amending re-signs). Never amend a
+   commit already on a shared branch — report the problem to your operator
+   instead.
+
+3. **Never emit review or release attestations** (`semver-trust attest …`,
+   `semver-trust release …`, `semver-trust promote …`). Signing an attestation
+   is a human accountability act and cannot be delegated to you.
+
+4. **Never merge through the platform's web UI**, and never rewrite history on
+   shared or protected branches. Merges are created locally and signed by a
+   maintainer.
+
+5. **Before editing trust material** — the policy file under `.semver-trust/`,
+   any key registry, a CI workflow file, or a branch-protection artifact — stop
+   and surface the change to your human operator instead of pushing it. These
+   files are the root of trust.
+
+6. **If verification aborts on your commit**, that is fail-closed behavior
+   working, not a low score. Do not retry, work around the verification, or
+   touch the trust material: read the one-line reason, report it to your
+   operator with the failing step, and stop.
+````
+
 ## The contract
 
 - You MUST ensure every commit you author is signed (the harness or operator

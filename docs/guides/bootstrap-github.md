@@ -25,6 +25,17 @@ ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_signing -C 'alex@example.com commit s
 ssh-keygen -t ed25519 -f ~/.ssh/semver-trust-attest -C 'semver-trust attestation signing'
 ```
 
+> **Prefer GPG for commit signing?** Use an existing OpenPGP key, or generate
+> one, in place of the commit-signing SSH key above — SemVer-Trust verifies
+> GPG-signed history just as well ([GPG-signed history](../reference/trust-material.md)):
+>
+> ```sh
+> gpg --quick-generate-key "Alex Doe <alex@example.com>" ed25519 sign
+> ```
+>
+> The **attestation** key stays SSH regardless: attestations are OpenSSH SSHSIG
+> signatures (ADR-022), never GPG. Step 2 shows the GPG commit-signing setup.
+
 ## 2. Trust material in the very first commit
 
 Verification reads trust material **from the tree of the commit being
@@ -51,6 +62,37 @@ printf '%s namespaces="attestation@semver-trust.dev" %s\n' alex@example.com \
 
 ([Registry formats](../reference/trust-material.md); note the two different
 namespaces — that separation is the point.)
+
+### Using a GPG key for commit signing instead
+
+If your commits are GPG-signed rather than SSH-signed, configure git for
+OpenPGP and record your **public** key in an armored keyring instead of the
+SSH allowed-signers registry. Everything else is unchanged — the attestation
+registry stays SSH (attestations are always SSHSIG, ADR-022), so keep the
+`attestation_signers` block above exactly as written. Replace only the
+commit-signing configuration and `allowed_signers` with:
+
+```sh
+git config gpg.format openpgp
+git config user.signingkey <YOUR-GPG-KEY-ID>   # long key id or full fingerprint
+git config commit.gpgsign true
+
+# Export your PUBLIC key into the in-tree keyring the verifier reads:
+gpg --armor --export <YOUR-GPG-KEY-ID> > .semver-trust/gpg-keyring.asc
+```
+
+Find `<YOUR-GPG-KEY-ID>` with `gpg --list-secret-keys --keyid-format long`. In
+the policy (next step) point `[identity.human]` at the keyring instead of the
+allowed-signers file:
+
+```toml
+[identity.human]
+gpg_keyring = ".semver-trust/gpg-keyring.asc"
+```
+
+The verifier defaults `--gpg-keyring` from that path when the flag is absent
+(reading it from the tree of the commit under verification), so GPG-signed
+commits verify with no extra flags — exactly as SSH-signed ones do.
 
 ## 3. Write the policy
 
