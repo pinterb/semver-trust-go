@@ -37,6 +37,33 @@ type Report struct {
 	// CleanChannel is the informational §6.2/ADR-032 clean-channel eligibility
 	// of the target component. Nil when no propagation target resolves.
 	CleanChannel *CleanChannelReport `json:"clean_channel,omitempty"`
+	// PolicyState is the §5.4/ADR-028 authenticated policy state, populated only
+	// in v0.10 mode (a bootstrap descriptor supplied). It is the digest-pinned
+	// policy view the release/v0.2 predicate's policy_state block binds — retained
+	// here so the release path reads it rather than re-deriving it. Nil in the
+	// v0.3 path.
+	PolicyState *PolicyStateReport `json:"policy_state,omitempty"`
+}
+
+// PolicyStateReport is the §5.4/ADR-028 authenticated policy state (release/v0.2
+// policy_state). At genesis the candidate equals the active policy (candidate
+// fields nil/empty) and the authority is "bootstrap".
+type PolicyStateReport struct {
+	ActivePolicy        PolicyDigestDescriptor   `json:"active_policy"`
+	ActiveTrustRoots    []PolicyDigestDescriptor `json:"active_trust_roots"`
+	CandidatePolicy     *PolicyDigestDescriptor  `json:"candidate_policy"`
+	CandidateTrustRoots []PolicyDigestDescriptor `json:"candidate_trust_roots"`
+	MandatoryWorkflows  []PolicyDigestDescriptor `json:"mandatory_workflows"`
+	Authority           string                   `json:"authority"`
+	AuthorityIdentity   PolicyDigestDescriptor   `json:"authority_identity"`
+}
+
+// PolicyDigestDescriptor pins a policy or trust-material resource: an optional
+// uri/path and its digest set.
+type PolicyDigestDescriptor struct {
+	URI    string            `json:"uri,omitempty"`
+	Path   string            `json:"path,omitempty"`
+	Digest map[string]string `json:"digest"`
 }
 
 // CleanChannelReport is the informational §6.2/ADR-032 clean-channel

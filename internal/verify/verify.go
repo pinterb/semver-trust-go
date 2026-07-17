@@ -5,6 +5,8 @@ package verify
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/semver-trust/semver-trust-go/conformance"
@@ -409,7 +411,54 @@ func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) err
 		return abort(stepTransition, fmt.Errorf(
 			"authenticated policy transition refused (%s, §5.4/ADR-028)", reason))
 	}
+
+	// Retain the authenticated policy state for the release path (the
+	// release/v0.2 policy_state block) rather than re-deriving it. Genesis is the
+	// candidate==active fixed point, so candidate fields stay nil/empty.
+	roots := make([]PolicyDigestDescriptor, 0, len(active.TrustMaterial))
+	for _, path := range sortedStrings(mapKeys(active.TrustMaterial)) {
+		roots = append(roots, PolicyDigestDescriptor{Path: path, Digest: digestSet(active.TrustMaterial[path])})
+	}
+	workflows := make([]PolicyDigestDescriptor, 0, len(desc.MandatoryMetaPaths))
+	for _, path := range desc.MandatoryMetaPaths {
+		dg, err := treeFileDigest(opts.RepoPath, opts.To, path)
+		if err != nil {
+			return abort(stepTransition, fmt.Errorf("mandatory workflow %q: %w", path, err))
+		}
+		workflows = append(workflows, PolicyDigestDescriptor{Path: path, Digest: digestSet(dg)})
+	}
+	report.PolicyState = &PolicyStateReport{
+		ActivePolicy:        PolicyDigestDescriptor{Path: active.Path, Digest: digestSet(active.Digest)},
+		ActiveTrustRoots:    roots,
+		CandidateTrustRoots: []PolicyDigestDescriptor{},
+		MandatoryWorkflows:  workflows,
+		Authority:           "bootstrap",
+		AuthorityIdentity:   PolicyDigestDescriptor{URI: "bootstrap:" + desc.Component, Digest: digestSet(desc.Digest())},
+	}
 	return nil
+}
+
+// digestSet parses a "sha256:<hex>" digest into the single-entry digest set the
+// release/v0.2 digestDescriptor carries. A value without a "<algo>:" prefix maps
+// under "sha256" (the trust-material convention, §5.4).
+func digestSet(prefixed string) map[string]string {
+	if algo, hex, ok := strings.Cut(prefixed, ":"); ok && algo != "" && hex != "" {
+		return map[string]string{algo: hex}
+	}
+	return map[string]string{"sha256": prefixed}
+}
+
+func mapKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func sortedStrings(xs []string) []string {
+	sort.Strings(xs)
+	return xs
 }
 
 // enumerateInterval selects the §5.2/ADR-027 exact release interval from the

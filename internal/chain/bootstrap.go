@@ -9,6 +9,8 @@
 package chain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -72,10 +74,22 @@ type BootstrapDescriptor struct {
 	// authenticated records that this descriptor was supplied and validated
 	// out-of-band; it is not self-asserted in the JSON.
 	authenticated bool
+
+	// raw is the exact loaded descriptor bytes, retained for Digest().
+	raw []byte
 }
 
 // Authenticated reports whether the descriptor was authenticated out-of-band.
 func (d *BootstrapDescriptor) Authenticated() bool { return d.authenticated }
+
+// Digest is the SHA-256 of the exact authenticated descriptor bytes, as
+// "sha256:<hex>" — the self-identity of the bootstrap authority (a
+// release/v0.2 policy_state authority_identity binds it). A verifier holding the
+// same out-of-band descriptor reproduces it.
+func (d *BootstrapDescriptor) Digest() string {
+	sum := sha256.Sum256(d.raw)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
 
 // LoadBootstrapDescriptor reads and authenticates a bootstrap descriptor under
 // the verifier-local-configuration model (ADR-028): the operator supplies it
@@ -113,6 +127,7 @@ func LoadBootstrapDescriptor(descriptorPath, repoPath string) (*BootstrapDescrip
 		return nil, err
 	}
 	d.authenticated = true
+	d.raw = data
 	return &d, nil
 }
 

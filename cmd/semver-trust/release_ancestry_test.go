@@ -180,6 +180,26 @@ func TestReleaseVersionAncestryContinuesLine(t *testing.T) {
 	if classified[legacyCommit] {
 		t.Errorf("pre-boundary legacy %s must be excluded from the interval", legacyCommit[:7])
 	}
+
+	// The authenticated policy state is retained on the report — the source the
+	// release/v0.2 policy_state block reads (M6 Phase B). Genesis is the
+	// candidate==active fixed point.
+	ps := result.Report.PolicyState
+	if ps == nil {
+		t.Fatal("report.PolicyState nil in v0.10 mode; release/v0.2 policy_state has no source")
+	}
+	if ps.Authority != "bootstrap" || ps.ActivePolicy.Path == "" || len(ps.ActivePolicy.Digest) == 0 {
+		t.Errorf("active_policy = %+v, want bootstrap authority + path + digest", ps.ActivePolicy)
+	}
+	if len(ps.ActiveTrustRoots) == 0 {
+		t.Error("active_trust_roots empty; the policy declares an allowed-signers registry")
+	}
+	if ps.CandidatePolicy != nil {
+		t.Errorf("candidate_policy = %+v, want nil at genesis (candidate == active)", ps.CandidatePolicy)
+	}
+	if ps.AuthorityIdentity.URI != "bootstrap:default" || len(ps.AuthorityIdentity.Digest) == 0 {
+		t.Errorf("authority_identity = %+v, want bootstrap:default with a digest", ps.AuthorityIdentity)
+	}
 }
 
 // TestReleaseVersionAncestryRejectsIterationOverride confirms a caller-selected

@@ -3,6 +3,8 @@
 package chain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +41,31 @@ func inceptionBody() string {
 		"trust_roles": {"human_signers": "m/humans"},
 		"mandatory_meta_paths": ["ci/release"]
 	}`
+}
+
+// Digest is the SHA-256 of the exact loaded descriptor bytes, "sha256:<hex>",
+// and it authenticates the bootstrap authority (release/v0.2 authority_identity).
+func TestBootstrapDigest(t *testing.T) {
+	body := inceptionBody()
+	p, repo := writeDescriptor(t, body)
+	d, err := LoadBootstrapDescriptor(p, repo)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	sum := sha256.Sum256([]byte(body))
+	want := "sha256:" + hex.EncodeToString(sum[:])
+	if d.Digest() != want {
+		t.Errorf("Digest() = %q, want the sha256 of the exact loaded bytes %q", d.Digest(), want)
+	}
+	// Deterministic: a second load of the same bytes digests identically.
+	p2, repo2 := writeDescriptor(t, body)
+	d2, err := LoadBootstrapDescriptor(p2, repo2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Digest() != d2.Digest() {
+		t.Errorf("Digest not deterministic: %q != %q", d.Digest(), d2.Digest())
+	}
 }
 
 func TestLoadBootstrapInception(t *testing.T) {
