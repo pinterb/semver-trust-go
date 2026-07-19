@@ -278,13 +278,24 @@ func verifyCompleteChain(head verifiedRelease, releases []verifiedRelease, compo
 			return version.VersionState{}, fmt.Errorf("accepted-predecessor: %s names a predecessor state not present in the store — the chain is broken (§7.5/ADR-027)", cur.tag)
 		}
 		// The two linkages must agree: the tag the successor pins as its
-		// predecessor must be the previous release's emitted tag at its TO.
+		// predecessor must be the previous release's emitted tag identity — in
+		// FULL: name, peeled commit OID, AND raw ref OID. The raw ref OID matters
+		// because ADR-036 excludes emission from resulting_state.digest, so the
+		// previous release's emission.tag.raw_ref_oid is not covered by its own
+		// signed digest; a successor that consistently binds a forged predecessor
+		// raw ref still reproduces its own digest, so this is the only place the
+		// forgery is caught.
+		prevEm := prev.doc.Predicate.VersionState.Emission.Tag
+		if prevEm == nil {
+			return version.VersionState{}, fmt.Errorf("accepted-predecessor: linked release %s binds no emission.tag", prev.tag)
+		}
 		pred := cur.doc.Predicate.VersionState.Predecessor
 		if pred == nil {
 			return version.VersionState{}, fmt.Errorf("accepted-predecessor: non-genesis release %s binds a null version_state.predecessor", cur.tag)
 		}
-		if pred.Name != prev.tag || pred.PeeledCommitOID != prev.to {
-			return version.VersionState{}, fmt.Errorf("accepted-predecessor: %s predecessor tag (%s→%s) does not match the linked release (%s→%s)", cur.tag, pred.Name, pred.PeeledCommitOID, prev.tag, prev.to)
+		if pred.Name != prevEm.Name || pred.PeeledCommitOID != prevEm.PeeledCommitOID || pred.RawRefOID != prevEm.RawRefOID {
+			return version.VersionState{}, fmt.Errorf("accepted-predecessor: %s predecessor tag identity {%s, raw %s, peeled %s} does not match the linked release's emitted tag {%s, raw %s, peeled %s}",
+				cur.tag, pred.Name, pred.RawRefOID, pred.PeeledCommitOID, prevEm.Name, prevEm.RawRefOID, prevEm.PeeledCommitOID)
 		}
 		cur = prev
 	}

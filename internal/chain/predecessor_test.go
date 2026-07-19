@@ -442,6 +442,29 @@ func TestAcceptedChainHeadBrokenLinkAborts(t *testing.T) {
 	}
 }
 
+// A successor that binds a FORGED predecessor raw ref OID — one consistent with
+// its own reproduced state digest, but not the genesis's real emitted tag object —
+// must still be rejected. ADR-036 excludes emission from resulting_state.digest, so
+// a self-consistent forged predecessor raw ref reproduces the successor's digest;
+// the full predecessor-tag-identity linkage check is the only place it is caught.
+func TestAcceptedChainHeadForgedPredecessorRawRefAborts(t *testing.T) {
+	repo := initGitRepo(t)
+	signer := chainTestSigner(t)
+	schema := releaseSchema(t)
+
+	// genesis emits with raw ref oid('7').
+	gd := emitAndStore(t, repo, signer, schema, genesisSpec(oid('1'), oid('7')))
+	// The successor's predecessor binding (wire + canonicalized baseline) uses a
+	// DIFFERENT raw ref oid('0') — internally consistent, so its own digest still
+	// reproduces, but the tag object it binds is not the genesis's.
+	emitAndStore(t, repo, signer, schema, advanceSpec(oid('1'), oid('0'), oid('2'), oid('8'), gd))
+
+	_, err := AcceptedChainHead(repo, "repo:test/auth", "auth", chainVerifier(t, signer), chainEpoch)
+	if err == nil || !strings.Contains(err.Error(), "does not match the linked release's emitted tag") {
+		t.Errorf("forged-raw-ref error = %v, want a predecessor-tag-identity mismatch abort", err)
+	}
+}
+
 // A release whose signed resulting_state.digest does not reproduce from its
 // version_state → tampered → abort.
 func TestAcceptedChainHeadTamperedDigestAborts(t *testing.T) {
