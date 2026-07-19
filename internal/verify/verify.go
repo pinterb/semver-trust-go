@@ -170,6 +170,21 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 		return nil, abort(stepLoadPolicy, err)
 	}
 
+	// v0.10 recurrence (§7.5/ADR-027): discover the accepted chain head for this
+	// component. A prior release/v0.2 makes the run RECURRING — the interval
+	// anchors at the predecessor (P..TO), the policy transition uses the
+	// predecessor authority, and the version line advances from the carried state.
+	// Absent a head — or with no attestation verifier to authenticate one — the run
+	// stays genesis, exactly as M1–M3. The head is established by fresh
+	// verification and unique-head cardinality, never a payload claim.
+	if opts.Bootstrap != nil && attVerifier != nil {
+		pred, perr := chain.AcceptedChainHead(repo, opts.Bootstrap.Repository, opts.Bootstrap.Component, attVerifier, at)
+		if perr != nil {
+			return nil, abort(stepLoadPolicy, perr)
+		}
+		report.Predecessor = pred
+	}
+
 	// ---- §10 step 2: enumerate commits (root..TO for a first release, ------
 	// boundary..TO under a policy-declared adoption boundary, ADR-026). ------
 	// Pre-boundary commits are outside the range and contribute nothing: no
@@ -372,15 +387,22 @@ func targetComponentEffective(report *Report) (ComponentEffective, bool) {
 }
 
 // checkPolicyTransition runs the §5.4/ADR-028 policy transition for a v0.10
-// genesis release: the policy at TO is both the active and the candidate (the
-// bootstrap authority governs the first interval as a fixed point), and the
-// out-of-band descriptor's policy facts — path, digest, digest-pinned trust
-// material, roles, subject, range mode, boundary, profiles — must all match it.
+// release. GENESIS: the policy at TO is both active and candidate (the bootstrap
+// authority governs the first interval as a fixed point), and the descriptor's
+// policy facts must all match it. RECURRING (report.Predecessor set): the accepted
+// predecessor chain head is the active authority — its digest-pinned policy path,
+// digest, trust material, and mandatory workflows govern the interval, and the
+// policy at TO is the candidate activated for the NEXT interval. This PR wires the
+// UNCHANGED-policy case (active == candidate == policy@TO, the predecessor pins
+// must match); a changed policy fails predecessor_policy_mismatch, and the
+// two-stage key rotation (active ≠ candidate) defers to a follow-on (#76 M6-C3).
 // The per-commit guardrails (unknown_active_signer, under_level_meta_commit) run
-// against the classified interval. Genesis only; the recurring predecessor
-// authority defers to #76 M6.
+// against the classified interval in both modes.
 func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) error {
 	desc := opts.Bootstrap
+	pred := report.Predecessor
+	recurring := pred != nil
+
 	active, err := MetaPolicyFromTree(pol, opts.PolicyPath, opts.RepoPath, opts.To)
 	if err != nil {
 		return abort(stepTransition, err)
@@ -389,16 +411,28 @@ func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) err
 	for _, c := range report.Commits {
 		commits = append(commits, policy.TransitionCommit{Signer: c.Signer, Level: c.Level, Paths: c.Paths})
 	}
+
+	rangeMode := desc.IntervalMode
 	var boundary *string
-	if desc.Boundary != nil {
+	authority := "bootstrap"
+	authorityIdentity := PolicyDigestDescriptor{URI: "bootstrap:" + desc.Component, Digest: digestSet(desc.Digest())}
+	mandatoryPaths := desc.MandatoryMetaPaths
+	switch {
+	case recurring:
+		rangeMode = "recurring"
+		authority = "predecessor"
+		authorityIdentity = PolicyDigestDescriptor{URI: "predecessor:" + pred.Tag(), Digest: digestSet(pred.AttestationDigest())}
+		mandatoryPaths = pred.PolicyPins().MandatoryMetaPaths
+	case desc.Boundary != nil:
 		oid := desc.Boundary.OID
 		boundary = &oid
 	}
+
 	in := policy.TransitionInputs{
 		Repository:            desc.Repository,
 		Component:             desc.Component,
-		Authority:             "bootstrap",
-		RangeMode:             desc.IntervalMode,
+		Authority:             authority,
+		RangeMode:             rangeMode,
 		Boundary:              boundary,
 		VerificationProfile:   desc.VerificationProfile,
 		ClockProfile:          desc.ClockProfile,
@@ -406,21 +440,28 @@ func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) err
 		ProvidedTrustMaterial: active.TrustMaterial,
 		Commits:               commits,
 	}
-	bootstrap := desc.PolicyBootstrap()
-	if _, _, reason := policy.SelectPolicyTransition(active, active, &bootstrap, nil, in); reason != "" {
+	var reason string
+	if recurring {
+		predPolicy := recurringPredecessorPolicy(pred, active, desc)
+		_, _, reason = policy.SelectPolicyTransition(active, active, nil, &predPolicy, in)
+	} else {
+		bootstrap := desc.PolicyBootstrap()
+		_, _, reason = policy.SelectPolicyTransition(active, active, &bootstrap, nil, in)
+	}
+	if reason != "" {
 		return abort(stepTransition, fmt.Errorf(
 			"authenticated policy transition refused (%s, §5.4/ADR-028)", reason))
 	}
 
-	// Retain the authenticated policy state for the release path (the
-	// release/v0.2 policy_state block) rather than re-deriving it. Genesis is the
-	// candidate==active fixed point, so candidate fields stay nil/empty.
+	// Retain the authenticated policy state for the release path (the release/v0.2
+	// policy_state block) rather than re-deriving it. The unchanged-policy case is
+	// the candidate==active fixed point, so candidate fields stay nil/empty.
 	roots := make([]PolicyDigestDescriptor, 0, len(active.TrustMaterial))
 	for _, path := range sortedStrings(mapKeys(active.TrustMaterial)) {
 		roots = append(roots, PolicyDigestDescriptor{Path: path, Digest: digestSet(active.TrustMaterial[path])})
 	}
-	workflows := make([]PolicyDigestDescriptor, 0, len(desc.MandatoryMetaPaths))
-	for _, path := range desc.MandatoryMetaPaths {
+	workflows := make([]PolicyDigestDescriptor, 0, len(mandatoryPaths))
+	for _, path := range mandatoryPaths {
 		dg, err := treeFileDigest(opts.RepoPath, opts.To, path)
 		if err != nil {
 			return abort(stepTransition, fmt.Errorf("mandatory workflow %q: %w", path, err))
@@ -432,10 +473,34 @@ func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) err
 		ActiveTrustRoots:    roots,
 		CandidateTrustRoots: []PolicyDigestDescriptor{},
 		MandatoryWorkflows:  workflows,
-		Authority:           "bootstrap",
-		AuthorityIdentity:   PolicyDigestDescriptor{URI: "bootstrap:" + desc.Component, Digest: digestSet(desc.Digest())},
+		Authority:           authority,
+		AuthorityIdentity:   authorityIdentity,
 	}
 	return nil
+}
+
+// recurringPredecessorPolicy assembles the §5.4/ADR-028 predecessor policy
+// authority from the accepted chain head's pins (its authenticated active policy
+// path/digest, trust-material digests, and mandatory workflows) plus the
+// chain-invariant profiles. TrustRoles are a function of the digest-pinned policy
+// and are not carried on the wire; for the unchanged-policy transition they equal
+// the active policy's roles — the digest and trust-material checks are the teeth
+// that authenticate the policy is unchanged, and a changed policy fails them.
+func recurringPredecessorPolicy(pred *chain.Predecessor, active policy.MetaPolicy, desc *chain.BootstrapDescriptor) policy.PredecessorPolicy {
+	pins := pred.PolicyPins()
+	return policy.PredecessorPolicy{
+		Accepted:            true,
+		ChainHead:           true,
+		Repository:          desc.Repository,
+		Component:           desc.Component,
+		VerificationProfile: desc.VerificationProfile,
+		ClockProfile:        desc.ClockProfile,
+		PolicyPath:          pins.PolicyPath,
+		PolicyDigest:        pins.PolicyDigest,
+		TrustMaterial:       pins.TrustMaterial,
+		TrustRoles:          active.TrustRoles,
+		MandatoryMetaPaths:  pins.MandatoryMetaPaths,
+	}
 }
 
 // digestSet parses a "sha256:<hex>" digest into the single-entry digest set the
@@ -461,13 +526,12 @@ func sortedStrings(xs []string) []string {
 	return xs
 }
 
-// enumerateInterval selects the §5.2/ADR-027 exact release interval from the
-// authenticated bootstrap descriptor (v0.10 mode) and materializes it as
-// RangeCommits for classification. Genesis only — inception or adoption; the
-// descriptor's own validate rejects any other mode, and a recurring interval
-// needs an accepted-predecessor chain head that only v0.2 emission provides
-// (#76 M6). A caller-selected From is refused by SelectInterval (untrusted_from):
-// in v0.10 the interval is authenticated, not caller-anchored.
+// enumerateInterval selects the §5.2/ADR-027 exact release interval and
+// materializes it as RangeCommits for classification. GENESIS (no accepted chain
+// head) uses the descriptor's inception/adoption mode. RECURRING (report.Predecessor
+// set) anchors at the accepted predecessor: the interval is Reach(TO) − Reach(P)
+// (git rev-list P..TO), with From pinned to P as ADR-027 requires. A caller From is
+// otherwise refused (in v0.10 the interval is authenticated, not caller-anchored).
 func enumerateInterval(repo string, opts Options, report *Report) ([]vcs.RangeCommit, error) {
 	desc := opts.Bootstrap
 	graph, err := vcs.CommitGraph(repo, opts.To)
@@ -479,11 +543,32 @@ func enumerateInterval(repo string, opts Options, report *Report) ([]vcs.RangeCo
 		Component:          desc.Component,
 		Mode:               vcs.IntervalMode(desc.IntervalMode),
 		To:                 report.ToCommit,
-		ExistingChainHeads: 0, // genesis; recurring defers to #76 M6
+		ExistingChainHeads: 0,
 		Boundary:           desc.IntervalBoundary(),
 		Commits:            graph,
 	}
-	if opts.From != "" {
+	if pred := report.Predecessor; pred != nil {
+		// Recurring: the accepted head anchors the interval, and the descriptor's
+		// genesis mode/boundary are not consulted. SelectInterval requires
+		// RequestedFrom == P. A caller --from is NOT silently replaced with P — it is
+		// resolved and passed through, so a caller-selected skip to a non-predecessor
+		// revision is refused (from_not_predecessor, §5.2/ADR-027); only when the
+		// caller gives no --from do we synthesize the accepted-head anchor P.
+		ipd := pred.IntervalDescriptor()
+		in.Mode = vcs.IntervalRecurring
+		in.ExistingChainHeads = 1
+		in.Predecessor = &ipd
+		in.Boundary = nil
+		from := pred.To()
+		if opts.From != "" {
+			resolved, cerr := commitHash(repo, opts.From)
+			if cerr != nil {
+				return nil, abort(stepEnumerate, fmt.Errorf("resolving --from %q: %w", opts.From, cerr))
+			}
+			from = resolved
+		}
+		in.RequestedFrom = &from
+	} else if opts.From != "" {
 		f := opts.From
 		in.RequestedFrom = &f
 	}
@@ -496,10 +581,14 @@ func enumerateInterval(repo string, opts Options, report *Report) ([]vcs.RangeCo
 	if err != nil {
 		return nil, abort(stepEnumerate, err)
 	}
-	// Disclosure: an adoption interval is anchored at a bootstrap-pinned boundary
-	// that is itself INCLUDED and verified (ADR-027/028 — earliest verifiable
-	// commit, not last legacy release).
-	if desc.Boundary != nil {
+	// Disclosure. Recurring: anchored at the predecessor tag (not an adoption
+	// boundary). Adoption genesis: the bootstrap-pinned boundary is itself INCLUDED
+	// and verified (ADR-027/028 — earliest verifiable commit, not last legacy
+	// release).
+	switch {
+	case report.Predecessor != nil:
+		report.From = report.Predecessor.Tag()
+	case desc.Boundary != nil:
 		report.From = desc.Boundary.OID
 		report.FromIsAdoptionBoundary = true
 		report.AdoptionBoundary = desc.Boundary.OID
