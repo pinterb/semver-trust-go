@@ -419,8 +419,10 @@ func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) err
 	active := candidate
 	rotated := false
 	if recurring {
+		// MetaPolicy.Digest and PolicyPins.PolicyDigest are both already "sha256:<hex>";
+		// compare directly. A digest OR trust-material change is a rotation.
 		pins := pred.PolicyPins()
-		if pins.PolicyDigest != "sha256:"+candidate.Digest || !sameTrustMaterial(pins.TrustMaterial, candidate.TrustMaterial) {
+		if pins.PolicyDigest != candidate.Digest || !sameTrustMaterial(pins.TrustMaterial, candidate.TrustMaterial) {
 			rotated = true
 			oldBytes, rerr := readTreeFile(opts.RepoPath, pred.To(), opts.PolicyPath)
 			if rerr != nil {
@@ -500,9 +502,18 @@ func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) err
 			candidateRoots = append(candidateRoots, PolicyDigestDescriptor{Path: path, Digest: digestSet(candidate.TrustMaterial[path])})
 		}
 	}
+	// The mandatory workflows are the ACTIVE authority's: genesis reads them from
+	// TO's tree; a recurring release reads them from the PREDECESSOR's tree (the
+	// active authority governing this interval), so a candidate that edits or
+	// removes a predecessor-mandated workflow does not silently rebind the wrong
+	// bytes here — the candidate's coverage is validated by SelectPolicyTransition.
+	workflowRev := opts.To
+	if recurring {
+		workflowRev = pred.To()
+	}
 	workflows := make([]PolicyDigestDescriptor, 0, len(mandatoryPaths))
 	for _, path := range mandatoryPaths {
-		dg, err := treeFileDigest(opts.RepoPath, opts.To, path)
+		dg, err := treeFileDigest(opts.RepoPath, workflowRev, path)
 		if err != nil {
 			return abort(stepTransition, fmt.Errorf("mandatory workflow %q: %w", path, err))
 		}

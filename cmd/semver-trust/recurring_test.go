@@ -258,6 +258,11 @@ func TestReleaseRecurringAdvanceEmitsChain(t *testing.T) {
 	if succ.Predicate.PolicyState.Authority != "predecessor" {
 		t.Errorf("policy_state.authority = %q, want predecessor", succ.Predicate.PolicyState.Authority)
 	}
+	// Unchanged recurring policy is the fixed point: no candidate is activated.
+	if succ.Predicate.PolicyState.CandidatePolicy != nil || len(succ.Predicate.PolicyState.CandidateTrustRoots) != 0 {
+		t.Errorf("unchanged recurring release bound candidate_policy=%v / %d candidate roots, want null/empty (candidate == active)",
+			succ.Predicate.PolicyState.CandidatePolicy, len(succ.Predicate.PolicyState.CandidateTrustRoots))
+	}
 
 	// The chain CONTINUES: a further commit, then verify --to HEAD discovers v0.2.0
 	// as the head, walks the full genesis→v0.2.0 chain (every digest + link
@@ -323,7 +328,9 @@ type recurringReleaseDoc struct {
 			PredecessorAttestation *json.RawMessage `json:"predecessor_attestation"`
 		} `json:"interval"`
 		PolicyState struct {
-			Authority string `json:"authority"`
+			Authority           string            `json:"authority"`
+			CandidatePolicy     *json.RawMessage  `json:"candidate_policy"`
+			CandidateTrustRoots []json.RawMessage `json:"candidate_trust_roots"`
 		} `json:"policy_state"`
 		VersionState struct {
 			Genesis     bool   `json:"genesis"`
