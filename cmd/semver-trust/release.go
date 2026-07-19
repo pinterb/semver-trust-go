@@ -544,34 +544,61 @@ func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescripto
 		refs[tag] = version.RefEntry(r)
 	}
 
-	var boundary *string
-	if desc.Boundary != nil {
-		oid := desc.Boundary.OID
-		boundary = &oid
+	decisionInputs := version.DecisionInputs{
+		EffectiveTrust:  comp.Effective,
+		Threshold:       report.Policy.Threshold,
+		Blast:           blast.String(),
+		Strategy:        report.Policy.Strategy,
+		DifferAvailable: report.Evidence.DifferAvailable,
+		SemanticFloor:   report.Evidence.SemanticFloor,
+		ClaimedBump:     claimed.String(),
 	}
-	bootstrap := desc.VersionBootstrap()
-	result := version.SelectVersionAncestry(version.AncestryInputs{
-		Authority:    "bootstrap",
-		Action:       "advance",
-		Repository:   desc.Repository,
-		Component:    desc.Component,
-		TagPrefix:    desc.TagPrefix,
-		IntervalMode: desc.IntervalMode,
-		Boundary:     boundary,
-		To:           report.ToCommit,
-		Graph:        graph,
-		Refs:         refs,
-		Decision: version.DecisionInputs{
-			EffectiveTrust:  comp.Effective,
-			Threshold:       report.Policy.Threshold,
-			Blast:           blast.String(),
-			Strategy:        report.Policy.Strategy,
-			DifferAvailable: report.Evidence.DifferAvailable,
-			SemanticFloor:   report.Evidence.SemanticFloor,
-			ClaimedBump:     claimed.String(),
-		},
-		Bootstrap: &bootstrap,
-	})
+
+	// GENESIS uses the bootstrap authority; RECURRING (an accepted chain head was
+	// discovered by verify) advances the version line from the predecessor's
+	// carried state under the predecessor authority (§7.5/ADR-029). The interval
+	// mode, authority, and predecessor input differ; the decision inputs are the
+	// same.
+	pred := report.Predecessor
+	var result version.AncestryResult
+	var sel version.VersionSelected
+	if pred != nil {
+		sel = pred.VersionSelected()
+		result = version.SelectVersionAncestry(version.AncestryInputs{
+			Authority:    "predecessor",
+			Action:       "advance",
+			Repository:   desc.Repository,
+			Component:    desc.Component,
+			TagPrefix:    desc.TagPrefix,
+			IntervalMode: "recurring",
+			To:           report.ToCommit,
+			Graph:        graph,
+			Refs:         refs,
+			Decision:     decisionInputs,
+			Predecessor:  &sel,
+		})
+	} else {
+		var boundary *string
+		if desc.Boundary != nil {
+			oid := desc.Boundary.OID
+			boundary = &oid
+		}
+		bootstrap := desc.VersionBootstrap()
+		result = version.SelectVersionAncestry(version.AncestryInputs{
+			Authority:    "bootstrap",
+			Action:       "advance",
+			Repository:   desc.Repository,
+			Component:    desc.Component,
+			TagPrefix:    desc.TagPrefix,
+			IntervalMode: desc.IntervalMode,
+			Boundary:     boundary,
+			To:           report.ToCommit,
+			Graph:        graph,
+			Refs:         refs,
+			Decision:     decisionInputs,
+			Bootstrap:    &bootstrap,
+		})
+	}
 	if result.Reason != "" {
 		return fail(fmt.Errorf("release refused: authenticated version ancestry failed (%s, §7.5/ADR-029)", result.Reason))
 	}
@@ -604,23 +631,41 @@ func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescripto
 	}
 
 	// Assemble the ADR-036 carried-forward version state the release/v0.2 predicate
-	// binds. Genesis only (M6 Phase B): no prior state, and the baseline is the
-	// authenticated version predecessor binding (nil for a new line). The clean cut
-	// carries no iteration; a prerelease records one per trust level (§7.2). This
+	// binds. RECURRING: the baseline is the predecessor's immutable emitted tag, the
+	// baseline core is its target core, and the target lineage appends the new
+	// interval (P..TO) to the predecessor's lineage — or, from a clean predecessor,
+	// starts fresh with the current interval only (ADR-029). GENESIS: no prior
+	// state; the baseline is the descriptor's version predecessor (nil for a new
+	// line) at core 0.0.0, and the lineage is the single genesis interval. This
 	// object is what version.StateDigest hashes for resulting_state.digest, so a
-	// future recurring verifier that rebuilds it from the same authenticated inputs
-	// reproduces the digest byte-for-byte.
+	// recurring verifier rebuilding it from the same authenticated inputs reproduces
+	// the digest byte-for-byte.
 	var baseline *version.Binding
 	baselineCore := "0.0.0"
-	if bootstrap.Predecessor != nil {
-		baseline = &version.Binding{
-			Tag:       bootstrap.Predecessor.Tag,
-			RefOID:    bootstrap.Predecessor.RefOID,
-			CommitOID: bootstrap.Predecessor.CommitOID,
+	var lineage []string
+	if pred != nil {
+		can := sel.CanonicalTags[0]
+		baseline = &version.Binding{Tag: can.Tag, RefOID: can.RefOID, CommitOID: can.CommitOID}
+		baselineCore = sel.State.TargetCore
+		intervalID := pred.To() + ".." + report.ToCommit
+		if sel.State.CleanAccepted {
+			lineage = []string{intervalID}
+		} else {
+			lineage = append(append([]string{}, sel.State.TargetIntervals...), intervalID)
 		}
-		if pv, perr := version.Parse(bootstrap.Predecessor.Tag); perr == nil {
-			baselineCore = fmt.Sprintf("%d.%d.%d", pv.Major, pv.Minor, pv.Patch)
+	} else {
+		bootstrap := desc.VersionBootstrap()
+		if bootstrap.Predecessor != nil {
+			baseline = &version.Binding{
+				Tag:       bootstrap.Predecessor.Tag,
+				RefOID:    bootstrap.Predecessor.RefOID,
+				CommitOID: bootstrap.Predecessor.CommitOID,
+			}
+			if pv, perr := version.Parse(bootstrap.Predecessor.Tag); perr == nil {
+				baselineCore = fmt.Sprintf("%d.%d.%d", pv.Major, pv.Minor, pv.Patch)
+			}
 		}
+		lineage = []string{version.GenesisIntervalID(desc.Component, desc.IntervalMode)}
 	}
 	iterations := map[string]int{}
 	if ver.Trust != nil {
@@ -632,7 +677,7 @@ func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescripto
 		TargetCore:      *result.TargetCore,
 		TargetBump:      bump.String(),
 		CleanAccepted:   ver.Trust == nil,
-		TargetIntervals: []string{version.GenesisIntervalID(desc.Component, desc.IntervalMode)},
+		TargetIntervals: lineage,
 		Iterations:      iterations,
 		CorrectiveFloor: result.CorrectiveFloor,
 	}
@@ -781,6 +826,15 @@ func parseRepositoryDigest(s string) (map[string]string, error) {
 	return map[string]string{algo: hexStr}, nil
 }
 
+// digestSetOf parses a "<algo>:<hex>" digest into the single-entry digest set the
+// release/v0.2 wire shapes carry. A bare value (no "<algo>:") maps under sha256.
+func digestSetOf(prefixed string) map[string]string {
+	if algo, hexStr, ok := strings.Cut(prefixed, ":"); ok && algo != "" && hexStr != "" {
+		return map[string]string{algo: hexStr}
+	}
+	return map[string]string{"sha256": prefixed}
+}
+
 // releaseDigestDesc maps a verify policy-state digest descriptor onto the attest
 // release/v0.2 shape (same uri/path/digest fields, distinct packages).
 func releaseDigestDesc(d verify.PolicyDigestDescriptor) attest.ReleaseDigestDescriptor {
@@ -820,10 +874,19 @@ func releaseV02Input(report *verify.Report, comp verify.ComponentEffective, deci
 			"release refused: release/v0.2 needs the authenticated policy state (§5.4/ADR-028); none was produced (not a v0.10 run?)")
 	}
 
-	// resulting_state.digest (ADR-036): genesis has no predecessor state, so the
-	// hash-chain link is null.
+	pred := report.Predecessor
+	recurring := pred != nil
+
+	// resulting_state.digest (ADR-036): genesis has no predecessor state (null
+	// hash-chain link); a recurring release chains to the predecessor's
+	// resulting_state.digest.
+	var priorStateDigest *string
+	if recurring {
+		d := pred.ResultingStateDigest()
+		priorStateDigest = &d
+	}
 	stateHex, err := version.StateDigest(
-		version.CanonicalStateMap(desc.Component, desc.TagPrefix, vd.State, nil))
+		version.CanonicalStateMap(desc.Component, desc.TagPrefix, vd.State, priorStateDigest))
 	if err != nil {
 		return attest.ReleaseV02Input{}, fmt.Errorf("release refused: version-state canonicalization failed: %w", err)
 	}
@@ -880,6 +943,22 @@ func releaseV02Input(report *verify.Report, comp verify.ComponentEffective, deci
 		boundary = &attest.ReleaseObjectRef{ID: "commit:" + report.AdoptionBoundary}
 	}
 
+	// Recurring emission facts: the interval mode, the cryptographic identity of
+	// the predecessor attestation this release continues (§8.1/ADR-027), and the
+	// prior_state (the predecessor's resulting state) — the ADR-036 hash-chain
+	// link the successor's resulting_state.digest is computed against.
+	intervalMode := desc.IntervalMode
+	var predAttestation *attest.ReleaseObjectRef
+	var priorState *attest.ReleaseStateIdentity
+	if recurring {
+		intervalMode = "recurring"
+		predAttestation = &attest.ReleaseObjectRef{ID: pred.AttestationRef(), Digest: digestSetOf(pred.AttestationDigest())}
+		priorState = &attest.ReleaseStateIdentity{
+			ID:     "version-state:" + desc.Component + ":" + pred.Tag(),
+			Digest: digestSetOf(pred.ResultingStateDigest()),
+		}
+	}
+
 	// version_state.predecessor is the authenticated baseline binding (null new line).
 	var predecessorTag *attest.ReleaseTagIdentity
 	if vd.State.Baseline != nil {
@@ -910,17 +989,18 @@ func releaseV02Input(report *verify.Report, comp verify.ComponentEffective, deci
 		},
 		Component: attest.ReleaseComponent{Name: desc.Component, TagPrefix: desc.TagPrefix},
 		Interval: attest.ReleaseInterval{
-			Mode:             desc.IntervalMode,
-			To:               attest.ReleaseObjectRef{ID: "commit:" + report.ToCommit},
-			AdoptionBoundary: boundary,
-			SourceIdentity:   map[string]string{"gitCommit": report.ToCommit},
+			Mode:                   intervalMode,
+			To:                     attest.ReleaseObjectRef{ID: "commit:" + report.ToCommit},
+			AdoptionBoundary:       boundary,
+			PredecessorAttestation: predAttestation,
+			SourceIdentity:         map[string]string{"gitCommit": report.ToCommit},
 		},
 		PolicyState: policyState,
 		VersionState: attest.ReleaseVersionState{
 			Action:      "advance",
-			Genesis:     true,
+			Genesis:     !recurring,
 			Predecessor: predecessorTag,
-			PriorState:  nil, // genesis: no prior state
+			PriorState:  priorState,
 			ResultingState: attest.ReleaseStateIdentity{
 				ID:     "version-state:" + desc.Component + ":" + tagName,
 				Digest: map[string]string{"sha256": stateHex},

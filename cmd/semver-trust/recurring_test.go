@@ -201,6 +201,146 @@ func TestVerifyRecurringAcceptsPredecessorFrom(t *testing.T) {
 	}
 }
 
+// TestReleaseRecurringAdvanceEmitsChain is the C2b payoff: after a genesis
+// release/v0.2, a RECURRING release advances the version line (v0.1.0 → v0.2.0)
+// under the predecessor authority — binding the recurring interval, the
+// predecessor attestation, the prior_state hash-chain link, and a chained
+// resulting_state — and the chain then CONTINUES: a further commit + verify walks
+// the full genesis→v0.2.0 chain (reproducing every state digest and link) and
+// classifies the next interval under the v0.2.0 authority.
+func TestReleaseRecurringAdvanceEmitsChain(t *testing.T) {
+	repo, descPath, genesisFounding, genesisCommit, newCommit := setupRecurringChain(t)
+	_ = genesisFounding
+
+	// Emit the RECURRING release at newCommit: advances v0.1.0 → v0.2.0.
+	out, err := runCommand(t, "release",
+		"--repo", repo, "--to", "main",
+		"--bootstrap-descriptor", descPath,
+		"--predicate", "v0.2",
+		"--repository-digest", "sha256:"+repoDigestHex,
+		"--claimed-bump", "minor", "--blast", "low",
+		"--verify-time", releaseEpoch,
+		"--tag-key", bobKeyPath(t), "--attest-key", bobKeyPath(t),
+		"--tagger-name", "alice", "--tagger-email", "alice@semver-trust.test",
+		"--json")
+	if err != nil {
+		t.Fatalf("recurring release: %v\n%s", err, out)
+	}
+	var result releaseResultJSON
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Channel != "clean" || result.Tag != "v0.2.0" {
+		t.Fatalf("recurring decision = %s/%s, want clean v0.2.0 (advance from v0.1.0)", result.Channel, result.Tag)
+	}
+	if result.VersionPredecessor == nil || *result.VersionPredecessor != "v0.1.0" {
+		t.Errorf("version_predecessor = %v, want v0.1.0", result.VersionPredecessor)
+	}
+
+	// The stored recurring release/v0.2 binds the chain: advance (not genesis), the
+	// predecessor tag, the recurring interval + predecessor_attestation, the
+	// predecessor authority, and prior_state == the genesis resulting_state.digest.
+	genesisDigest := storedResultingDigest(t, repo, "v0.1.0")
+	succ := storedRecurringDoc(t, repo, "v0.2.0")
+	vs := succ.Predicate.VersionState
+	if vs.Genesis || vs.Action != "advance" {
+		t.Errorf("version_state = genesis=%v action=%q, want false/advance", vs.Genesis, vs.Action)
+	}
+	if vs.Predecessor == nil || vs.Predecessor.Name != "v0.1.0" {
+		t.Errorf("version_state.predecessor = %+v, want v0.1.0", vs.Predecessor)
+	}
+	if vs.PriorState == nil || vs.PriorState.Digest["sha256"] != genesisDigest {
+		t.Errorf("prior_state.digest = %+v, want the genesis resulting digest %s", vs.PriorState, genesisDigest)
+	}
+	if succ.Predicate.Interval.Mode != "recurring" || succ.Predicate.Interval.PredecessorAttestation == nil {
+		t.Errorf("interval = %+v, want recurring + a predecessor_attestation", succ.Predicate.Interval)
+	}
+	if succ.Predicate.PolicyState.Authority != "predecessor" {
+		t.Errorf("policy_state.authority = %q, want predecessor", succ.Predicate.PolicyState.Authority)
+	}
+
+	// The chain CONTINUES: a further commit, then verify --to HEAD discovers v0.2.0
+	// as the head, walks the full genesis→v0.2.0 chain (every digest + link
+	// verified), and classifies the new interval under the v0.2.0 authority.
+	keys := stageVendoredKeys(t)
+	commitSignedCLI(t, repo, keys, "human-alice", "alice@semver-trust.test",
+		"widget.go", "package widget // v3\n", "feat: widget v3\n\nProvenance: human")
+	thirdCommit := gitOut(t, repo, "rev-parse", "HEAD")
+
+	vout, err := runCommand(t, "verify",
+		"--repo", repo, "--to", "main",
+		"--bootstrap-descriptor", descPath,
+		"--verify-time", releaseEpoch, "--json")
+	if err != nil {
+		t.Fatalf("verify after the recurring release (full chain walk): %v\n%s", err, vout)
+	}
+	var vr verifyReportJSON
+	if err := json.Unmarshal([]byte(vout), &vr); err != nil {
+		t.Fatal(err)
+	}
+	if vr.PolicyState == nil || vr.PolicyState.Authority != "predecessor" {
+		t.Errorf("chain verify authority = %+v, want the v0.2.0 predecessor", vr.PolicyState)
+	}
+	if vr.From != "v0.2.0" {
+		t.Errorf("chain verify from = %q, want v0.2.0 (the new head)", vr.From)
+	}
+	classified := map[string]bool{}
+	for _, c := range vr.Commits {
+		classified[c.SHA] = true
+	}
+	if !classified[thirdCommit] || classified[newCommit] || classified[genesisCommit] {
+		t.Errorf("interval after v0.2.0 = %v, want only the third commit %s", classified, thirdCommit[:7])
+	}
+}
+
+// storedResultingDigest reads the release/v0.2 stored under tag and returns its
+// version_state.resulting_state sha256 digest.
+func storedResultingDigest(t *testing.T, repo, tag string) string {
+	t.Helper()
+	return storedRecurringDoc(t, repo, tag).Predicate.VersionState.ResultingState.Digest["sha256"]
+}
+
+// storedRecurringDoc reads and decodes the release/v0.2 stored under tag.
+func storedRecurringDoc(t *testing.T, repo, tag string) recurringReleaseDoc {
+	t.Helper()
+	byTag, err := (attest.GitRefStore{Path: repo}).List(tag)
+	if err != nil || len(byTag) != 1 {
+		t.Fatalf("stored envelopes under %q = %d (%v), want 1", tag, len(byTag), err)
+	}
+	var doc recurringReleaseDoc
+	if err := json.Unmarshal(envelopePayload(t, byTag[0]), &doc); err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
+// recurringReleaseDoc is the subset of a release/v0.2 payload the chain assertions
+// read.
+type recurringReleaseDoc struct {
+	Predicate struct {
+		Interval struct {
+			Mode                   string           `json:"mode"`
+			PredecessorAttestation *json.RawMessage `json:"predecessor_attestation"`
+		} `json:"interval"`
+		PolicyState struct {
+			Authority string `json:"authority"`
+		} `json:"policy_state"`
+		VersionState struct {
+			Genesis     bool   `json:"genesis"`
+			Action      string `json:"action"`
+			Predecessor *struct {
+				Name string `json:"name"`
+			} `json:"predecessor"`
+			PriorState *struct {
+				Digest map[string]string `json:"digest"`
+			} `json:"prior_state"`
+			ResultingState struct {
+				Digest map[string]string `json:"digest"`
+			} `json:"resulting_state"`
+		} `json:"version_state"`
+	} `json:"predicate"`
+}
+
 // verifyReportJSON is the subset of the verify --json report the recurring test
 // asserts on.
 type verifyReportJSON struct {
