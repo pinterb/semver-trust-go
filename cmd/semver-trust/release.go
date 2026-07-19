@@ -57,6 +57,7 @@ func newReleaseCmd() *cobra.Command {
 		// The v0.2 emission surface (§8.1/ADR-030; opt-in, requires a descriptor).
 		predicate        string
 		repositoryDigest string
+		action           string
 	)
 
 	cmd := &cobra.Command{
@@ -144,6 +145,21 @@ prints the would-be tag and attestation without writing anything.`,
 				return fmt.Errorf("--predicate: unknown value %q (want v0.1 or v0.2)", predicate)
 			}
 
+			// The version action (§7.5/ADR-029) is a signed release-decision fact.
+			// recut re-cuts an unpromoted prerelease target and is only meaningful
+			// on the authenticated v0.10 chain (it needs an accepted prerelease
+			// predecessor, checked at decide time).
+			switch action {
+			case "", "advance":
+				action = "advance"
+			case "recut":
+				if desc == nil {
+					return errors.New("release refused: --action recut requires --bootstrap-descriptor (it re-cuts an accepted prerelease predecessor, §7.5/ADR-029)")
+				}
+			default:
+				return fmt.Errorf("--action: unknown value %q (want advance or recut)", action)
+			}
+
 			// Signing material resolves before any evaluation so a missing
 			// key fails fast, not after a half-done pipeline. --dry-run
 			// writes nothing and therefore needs no keys.
@@ -194,7 +210,7 @@ prints the would-be tag and attestation without writing anything.`,
 				vdec               *versionDecision // v0.10 version authority; nil in the v0.3 path
 			)
 			if desc != nil {
-				vd, derr := decideReleaseAncestry(report, desc, repoPath, claimed, blastScore)
+				vd, derr := decideReleaseAncestry(report, desc, repoPath, claimed, blastScore, action)
 				if derr != nil {
 					return derr
 				}
@@ -389,6 +405,7 @@ prints the would-be tag and attestation without writing anything.`,
 	f.BoolVar(&dryRun, "dry-run", false, "evaluate and decide, print the would-be tag and attestation, write nothing")
 	f.StringVar(&predicate, "predicate", "v0.1", "release attestation predicate: v0.1 (default) or v0.2. v0.2 emits the §8.1/ADR-030 authenticated chain head and requires --bootstrap-descriptor and --repository-digest")
 	f.StringVar(&repositoryDigest, "repository-digest", "", "canonical repository identity digest (<algo>:<hex>, §4.3) bound into a release/v0.2 attestation; required with --predicate v0.2")
+	f.StringVar(&action, "action", "advance", "version action (§7.5/ADR-029): advance (default, a new target core) or recut (re-cut an unpromoted prerelease target — same core, next iteration). recut requires --bootstrap-descriptor and an accepted prerelease predecessor")
 	for _, required := range []string{"claimed-bump", "blast"} {
 		if err := cmd.MarkFlagRequired(required); err != nil {
 			panic(err)
@@ -501,6 +518,13 @@ type versionDecision struct {
 	Predecessor *string
 	Iteration   uint64
 	State       version.VersionState
+	// Action is the signed §7.5 version action (advance | recut). PredecessorTag
+	// is the chain predecessor's emitted tag the successor binds as its
+	// version_state.predecessor (the chain link) — it equals State.Baseline for
+	// genesis and advance, but for recut the canonical baseline is preserved while
+	// the chain predecessor is the tag being re-cut, so they differ.
+	Action         string
+	PredecessorTag *version.Binding
 }
 
 // decideReleaseAncestry is the v0.10 decide path (§7.5/ADR-029) used when a
@@ -511,7 +535,7 @@ type versionDecision struct {
 // are facts of the descriptor, not of --from spelling (go#70). --from and
 // --iteration are not consulted: the descriptor is the version authority, and a
 // genesis iteration is authenticated (always 1).
-func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescriptor, repoPath string, claimed evidence.Bump, blast trust.Blast) (versionDecision, error) {
+func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescriptor, repoPath string, claimed evidence.Bump, blast trust.Blast, action string) (versionDecision, error) {
 	fail := func(err error) (versionDecision, error) {
 		return versionDecision{}, err
 	}
@@ -560,13 +584,16 @@ func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescripto
 	// mode, authority, and predecessor input differ; the decision inputs are the
 	// same.
 	pred := report.Predecessor
+	if action == "recut" && pred == nil {
+		return fail(errors.New("release refused: --action recut needs an accepted prerelease predecessor; none was found for this component (a genesis release advances)"))
+	}
 	var result version.AncestryResult
 	var sel version.VersionSelected
 	if pred != nil {
 		sel = pred.VersionSelected()
 		result = version.SelectVersionAncestry(version.AncestryInputs{
 			Authority:    "predecessor",
-			Action:       "advance",
+			Action:       action,
 			Repository:   desc.Repository,
 			Component:    desc.Component,
 			TagPrefix:    desc.TagPrefix,
@@ -631,27 +658,38 @@ func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescripto
 	}
 
 	// Assemble the ADR-036 carried-forward version state the release/v0.2 predicate
-	// binds. RECURRING: the baseline is the predecessor's immutable emitted tag, the
-	// baseline core is its target core, and the target lineage appends the new
-	// interval (P..TO) to the predecessor's lineage — or, from a clean predecessor,
-	// starts fresh with the current interval only (ADR-029). GENESIS: no prior
-	// state; the baseline is the descriptor's version predecessor (nil for a new
-	// line) at core 0.0.0, and the lineage is the single genesis interval. This
-	// object is what version.StateDigest hashes for resulting_state.digest, so a
-	// recurring verifier rebuilding it from the same authenticated inputs reproduces
-	// the digest byte-for-byte.
+	// binds. RECURRING ADVANCE: the predecessor's emitted tag becomes the new
+	// baseline, its target core the new baseline core, and the lineage appends the
+	// new interval (P..TO) — or starts fresh from a clean predecessor (ADR-029).
+	// RECURRING RECUT: the unpromoted target is PRESERVED — baseline, baseline core,
+	// and target bump carry unchanged and only the source lineage grows. GENESIS: no
+	// prior state; the baseline is the descriptor's version predecessor (nil for a
+	// new line) at core 0.0.0, single genesis interval. This object is what
+	// version.StateDigest hashes for resulting_state.digest, so a recurring verifier
+	// rebuilding it from the same authenticated inputs reproduces it byte-for-byte.
 	var baseline *version.Binding
 	baselineCore := "0.0.0"
+	targetBump := bump.String()
 	var lineage []string
+	var predecessorTag *version.Binding
 	if pred != nil {
 		can := sel.CanonicalTags[0]
-		baseline = &version.Binding{Tag: can.Tag, RefOID: can.RefOID, CommitOID: can.CommitOID}
-		baselineCore = sel.State.TargetCore
+		chainTag := &version.Binding{Tag: can.Tag, RefOID: can.RefOID, CommitOID: can.CommitOID}
+		predecessorTag = chainTag
 		intervalID := pred.To() + ".." + report.ToCommit
-		if sel.State.CleanAccepted {
-			lineage = []string{intervalID}
-		} else {
+		if action == "recut" {
+			baseline = sel.State.Baseline
+			baselineCore = sel.State.BaselineCore
+			targetBump = sel.State.TargetBump
 			lineage = append(append([]string{}, sel.State.TargetIntervals...), intervalID)
+		} else {
+			baseline = chainTag
+			baselineCore = sel.State.TargetCore
+			if sel.State.CleanAccepted {
+				lineage = []string{intervalID}
+			} else {
+				lineage = append(append([]string{}, sel.State.TargetIntervals...), intervalID)
+			}
 		}
 	} else {
 		bootstrap := desc.VersionBootstrap()
@@ -665,6 +703,7 @@ func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescripto
 				baselineCore = fmt.Sprintf("%d.%d.%d", pv.Major, pv.Minor, pv.Patch)
 			}
 		}
+		predecessorTag = baseline
 		lineage = []string{version.GenesisIntervalID(desc.Component, desc.IntervalMode)}
 	}
 	iterations := map[string]int{}
@@ -675,7 +714,7 @@ func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescripto
 		Baseline:        baseline,
 		BaselineCore:    baselineCore,
 		TargetCore:      *result.TargetCore,
-		TargetBump:      bump.String(),
+		TargetBump:      targetBump,
 		CleanAccepted:   ver.Trust == nil,
 		TargetIntervals: lineage,
 		Iterations:      iterations,
@@ -683,11 +722,13 @@ func decideReleaseAncestry(report *verify.Report, desc *chain.BootstrapDescripto
 	}
 
 	return versionDecision{
-		Decision:    trust.Decision{Channel: channel, Bump: bump, Version: ver},
-		Component:   comp,
-		Predecessor: result.VersionPredecessor,
-		Iteration:   iteration,
-		State:       state,
+		Decision:       trust.Decision{Channel: channel, Bump: bump, Version: ver},
+		Component:      comp,
+		Predecessor:    result.VersionPredecessor,
+		Iteration:      iteration,
+		State:          state,
+		Action:         action,
+		PredecessorTag: predecessorTag,
 	}, nil
 }
 
@@ -961,11 +1002,11 @@ func releaseV02Input(report *verify.Report, comp verify.ComponentEffective, deci
 
 	// version_state.predecessor is the authenticated baseline binding (null new line).
 	var predecessorTag *attest.ReleaseTagIdentity
-	if vd.State.Baseline != nil {
+	if vd.PredecessorTag != nil {
 		predecessorTag = &attest.ReleaseTagIdentity{
-			Name:            vd.State.Baseline.Tag,
-			RawRefOID:       vd.State.Baseline.RefOID,
-			PeeledCommitOID: vd.State.Baseline.CommitOID,
+			Name:            vd.PredecessorTag.Tag,
+			RawRefOID:       vd.PredecessorTag.RefOID,
+			PeeledCommitOID: vd.PredecessorTag.CommitOID,
 		}
 	}
 	lineage := make([]attest.ReleaseObjectRef, 0, len(vd.State.TargetIntervals))
@@ -997,7 +1038,7 @@ func releaseV02Input(report *verify.Report, comp verify.ComponentEffective, deci
 		},
 		PolicyState: policyState,
 		VersionState: attest.ReleaseVersionState{
-			Action:      "advance",
+			Action:      vd.Action,
 			Genesis:     !recurring,
 			Predecessor: predecessorTag,
 			PriorState:  priorState,
