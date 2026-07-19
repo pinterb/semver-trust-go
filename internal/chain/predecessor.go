@@ -3,6 +3,8 @@
 package chain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -53,6 +55,7 @@ type Predecessor struct {
 // facts the reader needs.
 type verifiedRelease struct {
 	doc          releaseV02Doc
+	envelope     []byte // the raw verified envelope (for the attestation identity)
 	to           string // subject digest.gitCommit (this release's TO)
 	tag          string // subject name (this release's emitted tag)
 	resultDigest string // resulting_state.digest sha256 (bare hex)
@@ -162,6 +165,7 @@ func verifiedReleasesFor(repository, component string, envelopes [][]byte, v *at
 		if seen[r.resultDigest] {
 			continue
 		}
+		r.envelope = env
 		seen[r.resultDigest] = true
 		releases = append(releases, r)
 	}
@@ -398,6 +402,22 @@ func (p *Predecessor) To() string { return p.head.to }
 
 // Tag is the head's emitted tag name.
 func (p *Predecessor) Tag() string { return p.head.tag }
+
+// AttestationDigest is the SHA-256 of the head's DSSE envelope as "sha256:<hex>"
+// — the cryptographic identity of the predecessor attestation a recurring release
+// binds (§8.1/ADR-027: the successor MUST bind its predecessor attestation's
+// identity).
+func (p *Predecessor) AttestationDigest() string {
+	sum := sha256.Sum256(p.head.envelope)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+// AttestationRef is the head attestation's stable store reference
+// (refs/attestations/<to>/<content-digest>) — the id a recurring release names as
+// its predecessor_attestation.
+func (p *Predecessor) AttestationRef() string {
+	return attest.EnvelopeRef(p.head.to, p.head.envelope)
+}
 
 // PolicyPins are the head's authenticated §5.4/ADR-028 policy facts — the anchors
 // a recurring policy transition authenticates the active policy against. Profiles

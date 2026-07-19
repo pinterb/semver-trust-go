@@ -2,6 +2,8 @@
 
 package verify
 
+import "github.com/semver-trust/semver-trust-go/internal/chain"
+
 // Report is the structured result of a verification run: everything §10 steps
 // 1–7 produced, in a shape both the human table and --json render from. The
 // per-step sections carry the §10 step they correspond to so a reader can
@@ -43,6 +45,14 @@ type Report struct {
 	// here so the release path reads it rather than re-deriving it. Nil in the
 	// v0.3 path.
 	PolicyState *PolicyStateReport `json:"policy_state,omitempty"`
+
+	// Predecessor is the accepted chain head (§7.5/ADR-027) when the v0.10 run is
+	// RECURRING — a prior release/v0.2 exists for this component. Nil at genesis
+	// (or the v0.3 path). It is discovered once at step 1 and drives the recurring
+	// interval and policy transition here, and the recurring version decision in
+	// the release path. Not serialized: it is an in-process authority handoff, not
+	// a report field.
+	Predecessor *chain.Predecessor `json:"-"`
 }
 
 // PolicyStateReport is the §5.4/ADR-028 authenticated policy state (release/v0.2
