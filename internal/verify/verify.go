@@ -403,10 +403,40 @@ func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) err
 	pred := report.Predecessor
 	recurring := pred != nil
 
-	active, err := MetaPolicyFromTree(pol, opts.PolicyPath, opts.RepoPath, opts.To)
+	// candidate is the policy at TO — activated for the NEXT interval.
+	candidate, err := MetaPolicyFromTree(pol, opts.PolicyPath, opts.RepoPath, opts.To)
 	if err != nil {
 		return abort(stepTransition, err)
 	}
+
+	// active governs THIS interval. Genesis and an unchanged recurring policy are
+	// the fixed point (active == candidate). A recurring release whose candidate
+	// differs from the predecessor's pinned policy/material is a two-stage rotation
+	// (ADR-028): the OLD policy — read from the predecessor's OWN tree — is the
+	// active authority, so the interval is verified against the old roots
+	// (unknown_active_signer rejects a candidate-only key that signs this interval)
+	// and the candidate (new) roots activate only for the next interval.
+	active := candidate
+	rotated := false
+	if recurring {
+		pins := pred.PolicyPins()
+		if pins.PolicyDigest != "sha256:"+candidate.Digest || !sameTrustMaterial(pins.TrustMaterial, candidate.TrustMaterial) {
+			rotated = true
+			oldBytes, rerr := readTreeFile(opts.RepoPath, pred.To(), opts.PolicyPath)
+			if rerr != nil {
+				return abort(stepTransition, fmt.Errorf("reading the predecessor's active policy from its tree: %w", rerr))
+			}
+			oldPol, perr := policy.Parse(oldBytes)
+			if perr != nil {
+				return abort(stepTransition, fmt.Errorf("parsing the predecessor's active policy: %w", perr))
+			}
+			active, err = MetaPolicyFromTree(oldPol, opts.PolicyPath, opts.RepoPath, pred.To())
+			if err != nil {
+				return abort(stepTransition, err)
+			}
+		}
+	}
+
 	commits := make([]policy.TransitionCommit, 0, len(report.Commits))
 	for _, c := range report.Commits {
 		commits = append(commits, policy.TransitionCommit{Signer: c.Signer, Level: c.Level, Paths: c.Paths})
@@ -443,10 +473,10 @@ func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) err
 	var reason string
 	if recurring {
 		predPolicy := recurringPredecessorPolicy(pred, active, desc)
-		_, _, reason = policy.SelectPolicyTransition(active, active, nil, &predPolicy, in)
+		_, _, reason = policy.SelectPolicyTransition(active, candidate, nil, &predPolicy, in)
 	} else {
 		bootstrap := desc.PolicyBootstrap()
-		_, _, reason = policy.SelectPolicyTransition(active, active, &bootstrap, nil, in)
+		_, _, reason = policy.SelectPolicyTransition(active, candidate, &bootstrap, nil, in)
 	}
 	if reason != "" {
 		return abort(stepTransition, fmt.Errorf(
@@ -454,11 +484,21 @@ func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) err
 	}
 
 	// Retain the authenticated policy state for the release path (the release/v0.2
-	// policy_state block) rather than re-deriving it. The unchanged-policy case is
-	// the candidate==active fixed point, so candidate fields stay nil/empty.
+	// policy_state block). active==candidate (genesis / unchanged) leaves the
+	// candidate fields empty; a rotation binds the candidate activated for the next
+	// interval.
 	roots := make([]PolicyDigestDescriptor, 0, len(active.TrustMaterial))
 	for _, path := range sortedStrings(mapKeys(active.TrustMaterial)) {
 		roots = append(roots, PolicyDigestDescriptor{Path: path, Digest: digestSet(active.TrustMaterial[path])})
+	}
+	var candidatePolicy *PolicyDigestDescriptor
+	candidateRoots := []PolicyDigestDescriptor{}
+	if rotated {
+		cp := PolicyDigestDescriptor{Path: candidate.Path, Digest: digestSet(candidate.Digest)}
+		candidatePolicy = &cp
+		for _, path := range sortedStrings(mapKeys(candidate.TrustMaterial)) {
+			candidateRoots = append(candidateRoots, PolicyDigestDescriptor{Path: path, Digest: digestSet(candidate.TrustMaterial[path])})
+		}
 	}
 	workflows := make([]PolicyDigestDescriptor, 0, len(mandatoryPaths))
 	for _, path := range mandatoryPaths {
@@ -471,12 +511,26 @@ func checkPolicyTransition(opts Options, pol *policy.Policy, report *Report) err
 	report.PolicyState = &PolicyStateReport{
 		ActivePolicy:        PolicyDigestDescriptor{Path: active.Path, Digest: digestSet(active.Digest)},
 		ActiveTrustRoots:    roots,
-		CandidateTrustRoots: []PolicyDigestDescriptor{},
+		CandidatePolicy:     candidatePolicy,
+		CandidateTrustRoots: candidateRoots,
 		MandatoryWorkflows:  workflows,
 		Authority:           authority,
 		AuthorityIdentity:   authorityIdentity,
 	}
 	return nil
+}
+
+// sameTrustMaterial reports whether two path→digest trust-material maps are equal.
+func sameTrustMaterial(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 // recurringPredecessorPolicy assembles the §5.4/ADR-028 predecessor policy
