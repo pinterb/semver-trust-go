@@ -290,6 +290,18 @@ func verifyCompleteChain(head verifiedRelease, releases []verifiedRelease, compo
 	for i := len(chainOrder) - 1; i >= 0; i-- {
 		r := chainOrder[i]
 		vs := r.doc.Predicate.VersionState
+		// A chain member must carry a supported action for its position: genesis is
+		// always an advance; a recurring predecessor-chain release is advance or
+		// recut. supersede is an attestation-only re-evaluation, not a chain head —
+		// reject it here until the superseded-authority reader lands (#76 M6-C5), so
+		// a self-consistent supersede release cannot be reconstructed as an
+		// advance-like head, and a genesis cannot claim recut.
+		switch {
+		case vs.Genesis && vs.Action != "advance":
+			return version.VersionState{}, fmt.Errorf("accepted-predecessor: genesis release %s has action %q, want advance (§7.5/ADR-029)", r.tag, vs.Action)
+		case !vs.Genesis && vs.Action != "advance" && vs.Action != "recut":
+			return version.VersionState{}, fmt.Errorf("accepted-predecessor: release %s has unsupported chain action %q (only advance and recut are chain heads; supersede is attestation-only, #76 M6-C5)", r.tag, vs.Action)
+		}
 		var baseline *version.Binding
 		var baselineCore string
 		if vs.Action == "recut" {

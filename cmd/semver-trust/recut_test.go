@@ -141,3 +141,20 @@ func TestReleaseRecutRequiresDescriptor(t *testing.T) {
 		t.Errorf("recut without a descriptor: error = %v, want a --bootstrap-descriptor requirement", err)
 	}
 }
+
+// TestReleaseRecutRequiresV02 confirms --action recut is refused with the default
+// v0.1 predicate: a recut is a §7.5 version-state fact only release/v0.2 can bind,
+// so it must not fall through to the legacy emit path and mint a chain-invisible tag.
+func TestReleaseRecutRequiresV02(t *testing.T) {
+	repo, descPath := setupPrereleaseChain(t)
+	// --action recut with a descriptor but the DEFAULT predicate (v0.1).
+	_, err := runCommand(t, "release",
+		"--repo", repo, "--to", "main",
+		"--bootstrap-descriptor", descPath,
+		"--action", "recut",
+		"--claimed-bump", "patch", "--blast", "low",
+		"--verify-time", releaseEpoch, "--dry-run", "--json")
+	if err == nil || !strings.Contains(err.Error(), "requires --predicate v0.2") {
+		t.Errorf("recut without --predicate v0.2: error = %v, want a --predicate v0.2 requirement", err)
+	}
+}

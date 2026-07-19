@@ -156,6 +156,9 @@ prints the would-be tag and attestation without writing anything.`,
 				if desc == nil {
 					return errors.New("release refused: --action recut requires --bootstrap-descriptor (it re-cuts an accepted prerelease predecessor, §7.5/ADR-029)")
 				}
+				if predicate != "v0.2" {
+					return errors.New("release refused: --action recut requires --predicate v0.2; the recut is a §7.5 version-state fact only the release/v0.2 predicate binds (a v0.1 release cannot represent it in the accepted chain)")
+				}
 			default:
 				return fmt.Errorf("--action: unknown value %q (want advance or recut)", action)
 			}

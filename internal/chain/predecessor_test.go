@@ -528,6 +528,38 @@ func TestAcceptedChainHeadForgedPredecessorRawRefAborts(t *testing.T) {
 	}
 }
 
+// The reader accepts only supported chain actions: a self-consistent release/v0.2
+// with action "supersede" (attestation-only until C5) must NOT be reconstructed as
+// an advance-like chain head, and a genesis must be an advance, never a recut.
+func TestAcceptedChainHeadRejectsUnsupportedActions(t *testing.T) {
+	t.Run("supersede-on-chain", func(t *testing.T) {
+		repo := initGitRepo(t)
+		signer := chainTestSigner(t)
+		schema := releaseSchema(t)
+		gd := emitAndStore(t, repo, signer, schema, genesisSpec(oid('1'), oid('7')))
+		succ := advanceSpec(oid('1'), oid('7'), oid('2'), oid('8'), gd)
+		succ.action = "supersede"
+		emitAndStore(t, repo, signer, schema, succ)
+		_, err := AcceptedChainHead(repo, "repo:test/auth", "auth", chainVerifier(t, signer), chainEpoch)
+		if err == nil || !strings.Contains(err.Error(), "unsupported chain action") {
+			t.Errorf("supersede on the chain: error = %v, want an unsupported-chain-action abort", err)
+		}
+	})
+
+	t.Run("genesis-recut", func(t *testing.T) {
+		repo := initGitRepo(t)
+		signer := chainTestSigner(t)
+		schema := releaseSchema(t)
+		g := genesisSpec(oid('1'), oid('7'))
+		g.action = "recut"
+		emitAndStore(t, repo, signer, schema, g)
+		_, err := AcceptedChainHead(repo, "repo:test/auth", "auth", chainVerifier(t, signer), chainEpoch)
+		if err == nil || !strings.Contains(err.Error(), "genesis release") {
+			t.Errorf("genesis recut: error = %v, want a genesis-action abort", err)
+		}
+	})
+}
+
 // A release whose signed resulting_state.digest does not reproduce from its
 // version_state → tampered → abort.
 func TestAcceptedChainHeadTamperedDigestAborts(t *testing.T) {
