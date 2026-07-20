@@ -4,11 +4,15 @@
 # Release pipeline (WS2b). Triggered by pushing a `v*` tag, or dispatched at an
 # existing tag ref (so v0.1.0 can be published retroactively). Three jobs:
 #
-#   verify     — the dogfood gate (enforced, blocking): re-run spec §10
-#                steps 1-7 over root..TAG at the tag's RECORDED attestation
-#                instant. The maintainer's temp GPG key expires 2026-08-01, so
-#                the wall clock must NOT be used; the timestamp comes from the
-#                release attestation stored under refs/attestations/<tag>/*.
+#   verify     — the dogfood gate (enforced, blocking): re-verify the release at
+#                the tag's RECORDED attestation instant (never the wall clock —
+#                the maintainer's temp GPG key expires 2026-08-01). The path
+#                depends on the attestation predicate: a default release/v0.1 tag
+#                re-derives the decision over root..TAG; a v0.10 recurring
+#                release/v0.2 tag verifies the chain under the out-of-band
+#                bootstrap descriptor (the BOOTSTRAP_DESCRIPTOR repo variable) and
+#                confirms the descriptor binds the tag's tree. Both read the
+#                instant from refs/attestations/<tag>/*.
 #   goreleaser — build + publish archives, checksums, SBOMs, and keyless cosign
 #                signatures via .goreleaser.yaml (needs a green verify).
 #   badge      — compose the shields.io endpoint badge from verify's effective
@@ -58,7 +62,7 @@ jobs:
       - name: Build semver-trust
         run: go build -o semver-trust ./cmd/semver-trust
 
-      - name: Extract the tag's recorded attestation timestamp
+      - name: Extract the tag's recorded attestation facts
         id: ts
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
@@ -66,32 +70,101 @@ jobs:
           set -euo pipefail
           ref=$(git for-each-ref "refs/attestations/${TAG}/*" --format='%(refname)' | head -1)
           if [ -z "${ref}" ]; then
-            echo "::error::no release attestation ref under refs/attestations/${TAG}/ — run the release ceremony (docs/release-runbook.md) before publishing."
+            echo "::error::no release attestation ref under refs/attestations/${TAG}/ — run the release ceremony (docs/release-runbook.md or docs/recurring-release-runbook.md) before publishing."
             exit 1
           fi
-          ts=$(git cat-file blob "$(git rev-parse "${ref}")" | \
-            python3 -c 'import json,base64,sys; e=json.load(sys.stdin); print(json.loads(base64.b64decode(e["payload"]))["predicate"]["timestamp"])')
-          echo "Using recorded attestation timestamp ${ts} (from ${ref})."
-          echo "timestamp=${ts}" >>"${GITHUB_OUTPUT}"
+          # The predicate type selects the verify path (default v0.1 vs the v0.10
+          # recurring chain, v0.2). timestamp is the recorded instant (ADR-018).
+          # effective backstops the badge for a v0.2 tag, whose at-the-head verify is
+          # promotion_required and so emits no report (see the verify step).
+          eval "$(git cat-file blob "$(git rev-parse "${ref}")" | python3 -c '
+          import json, base64, sys
+          p = json.loads(base64.b64decode(json.load(sys.stdin)["payload"]))
+          pred = p["predicate"]
+          print("PREDICATE=%s" % p["predicateType"])
+          print("TS=%s" % pred["timestamp"])
+          print("EFF=%s" % (pred.get("trust") or {}).get("effective", ""))
+          ')"
+          echo "Predicate ${PREDICATE}; recorded instant ${TS} (from ${ref})."
+          {
+            echo "timestamp=${TS}"
+            echo "predicate=${PREDICATE}"
+            echo "effective=${EFF}"
+          } >>"${GITHUB_OUTPUT}"
 
-      - name: Verify this release (spec §10 steps 1-7)
+      - name: Verify this release (spec §10)
         id: verify
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
           TS: ${{ steps.ts.outputs.timestamp }}
+          PREDICATE: ${{ steps.ts.outputs.predicate }}
+          ATT_EFFECTIVE: ${{ steps.ts.outputs.effective }}
+          DESCRIPTOR: ${{ vars.BOOTSTRAP_DESCRIPTOR }}
         run: |
           set -euo pipefail
-          ./semver-trust verify \
-            --repo . \
-            --from '' \
-            --to "${TAG}" \
-            --gpg-keyring .semver-trust/gpg-keyring.asc \
-            --attestation-signers .semver-trust/attestation_signers \
-            --verify-time "${TS}" \
-            --json >verify-report.json
-          effective=$(jq -r '.propagation as $p
-            | (first($p.components[] | select(.name == $p.target)) // $p.components[0])
-            | .effective' verify-report.json)
+          case "${PREDICATE}" in
+          https://semver-trust.dev/release/v0.1)
+            # Default path (unchanged): re-derive the decision from root..TAG at the
+            # recorded instant, and read the effective trust from the fresh report.
+            ./semver-trust verify \
+              --repo . \
+              --from '' \
+              --to "${TAG}" \
+              --gpg-keyring .semver-trust/gpg-keyring.asc \
+              --attestation-signers .semver-trust/attestation_signers \
+              --verify-time "${TS}" \
+              --json >verify-report.json
+            effective=$(jq -r '.propagation as $p
+              | (first($p.components[] | select(.name == $p.target)) // $p.components[0])
+              | .effective' verify-report.json)
+            ;;
+          https://semver-trust.dev/release/v0.2)
+            # v0.10 recurring chain. Its authenticated authority is the OUT-OF-BAND
+            # bootstrap descriptor (ADR-028), supplied as a repository variable and
+            # materialized OUTSIDE the checkout so the in-repo-path guard accepts it.
+            if [ -z "${DESCRIPTOR}" ]; then
+              echo "::error::a release/v0.2 tag needs the BOOTSTRAP_DESCRIPTOR repository variable — the out-of-band v0.10 authority (docs/recurring-release-runbook.md)."
+              exit 1
+            fi
+            printf '%s' "${DESCRIPTOR}" >"${RUNNER_TEMP}/bootstrap-descriptor.json"
+            desc="${RUNNER_TEMP}/bootstrap-descriptor.json"
+            # (a) The descriptor must authentically bind THIS tag's tree: its policy and
+            # trust-material digests are the committed-blob hashes. Verifying at the tag
+            # alone cannot check this — the at-the-head interval aborts (promotion_required)
+            # before the policy-transition step — so recompute and compare independently.
+            fail=0
+            want=$(jq -r '.policy_digest' "${desc}")
+            got="sha256:$(git cat-file blob "${TAG}:$(jq -r '.policy_path' "${desc}")" | sha256sum | cut -d' ' -f1)"
+            [ "${want}" = "${got}" ] || { echo "::error::descriptor policy_digest does not match ${TAG}'s tree."; fail=1; }
+            while IFS=$'\t' read -r path dig; do
+              g="sha256:$(git cat-file blob "${TAG}:${path}" | sha256sum | cut -d' ' -f1)"
+              [ "${dig}" = "${g}" ] || { echo "::error::descriptor trust_material[${path}] does not match ${TAG}'s tree."; fail=1; }
+            done < <(jq -r '.trust_material | to_entries[] | "\(.key)\t\(.value)"' "${desc}")
+            [ "${fail}" -eq 0 ] || exit 1
+            echo "Bootstrap descriptor binds ${TAG}'s tree."
+            # (b) The complete chain must verify. Verifying at the head's own tag is
+            # promotion_required BY DESIGN (empty interval) — but the chain reader
+            # validates the whole chain genesis→head FIRST, so that specific abort means
+            # "chain valid, this is the head." Any other failure is a real break.
+            set +e
+            out=$(./semver-trust verify --repo . --to "${TAG}" \
+              --bootstrap-descriptor "${desc}" --verify-time "${TS}" 2>&1)
+            rc=$?
+            set -e
+            printf '%s\n' "${out}"
+            if [ "${rc}" -ne 0 ] && ! printf '%s' "${out}" | grep -q 'promotion_required'; then
+              echo "::error::release/v0.2 chain verification failed (not the expected promotion_required-at-head)."
+              exit 1
+            fi
+            # No interval report is emitted at the head; the badge trust is the
+            # attestation's own recorded effective level.
+            effective="${ATT_EFFECTIVE}"
+            ;;
+          *)
+            echo "::error::unknown release predicate '${PREDICATE}'."
+            exit 1
+            ;;
+          esac
           echo "Verified at effective ${effective}."
           echo "effective=${effective}" >>"${GITHUB_OUTPUT}"
 
@@ -100,6 +173,9 @@ jobs:
         with:
           name: verify-report
           path: verify-report.json
+          # A v0.2 (v0.10 recurring) tag verifies at the head and emits no report;
+          # the badge trust comes from the attestation instead. Don't fail the upload.
+          if-no-files-found: ignore
 
   goreleaser:
     name: goreleaser (build + publish)
