@@ -138,9 +138,13 @@ bot_accounts = ["noreply@github.com"]
 File formats and enrollment flow live in
 [trust material](trust-material.md). Declaring these paths in the policy lets
 `verify`, `release`, and `promote` default their trust-material flags from the
-target commit's tree — the whole repository verifies flag-free, and an
-explicitly supplied flag still overrides the policy when material must come
-from out-of-band.
+target commit's tree — the whole repository verifies flag-free. On the default
+v0.3 path an explicitly supplied `--allowed-signers` / `--gpg-keyring` /
+`--attestation-signers` still overrides the policy. In v0.10 **descriptor mode**,
+though, those overrides are **rejected fail-closed**: the bootstrap descriptor
+pins the trust material by digest from the tree, so honoring a filesystem override
+would defeat that pinning — a key-substitution bypass (spec repository ADR-028).
+The material used for verification must be the material the descriptor pins.
 
 ## `[trailers]`, `[graph]`, `[evidence]`
 

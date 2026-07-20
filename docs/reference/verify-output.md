@@ -145,12 +145,13 @@ report shape is versioned with the tool.
 
 When a **bootstrap descriptor** is supplied — the opt-in v0.10 path
 (`--bootstrap-descriptor`, [the policy file](policy.md)) — the `--json` report
-additionally carries the authenticated **policy state** (active and candidate
-policy plus trust roots, and the transition authority) and **version state** (the
-authenticated version predecessor and the resulting-state digest) — the facts the
-`release/v0.2` predicate binds (spec repository ADR-028/029; the version-state
-canonicalization profile, ADR-036, is finalizing). These are JSON-only; the human
-table stops at step 7.
+additionally carries the authenticated **policy state** (`policy_state`: active
+and candidate policy plus trust roots, and the transition authority; spec
+repository ADR-028). The authenticated **version state** (the version predecessor
+and its ADR-029/036 resulting-state digest) is *not* a verify field — it is bound
+by the `release/v0.2` predicate the release path emits; the accepted chain head
+`verify` uses to detect recurrence is an in-process handoff, not serialized.
+`policy_state` is JSON-only; the human table stops at step 7.
 
 ## See also
 
