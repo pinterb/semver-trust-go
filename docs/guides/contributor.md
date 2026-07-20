@@ -43,9 +43,22 @@ git config commit.gpgsign true
 git config commit.template .gitmessage
 ```
 
-Optionally install the
+Optionally enable the committed
 [commit-msg hook](../reference/trailers.md#the-commit-msg-hook) so a missing
-trailer can never leave your machine.
+trailer can never leave your machine:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+Configure the attestation-ref fetch once, so every `git fetch`/`pull` in this
+clone carries release and review evidence automatically (non-force, because
+those refs are content-addressed and append-only —
+[attestation refs](../reference/attestation-refs.md)):
+
+```sh
+git config --add remote.origin.fetch 'refs/attestations/*:refs/attestations/*'
+```
 
 To see verification locally, point git at the repository's signer registry —
 until you do, `git log --format='%G?'` reports an error rather than a

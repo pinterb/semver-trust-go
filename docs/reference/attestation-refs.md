@@ -39,6 +39,20 @@ git fetch origin 'refs/attestations/*:refs/attestations/*'
 git for-each-ref refs/attestations/
 ```
 
+In a clone you work in over time, configure the **fetch** side once so every
+future `git fetch`/`pull` carries evidence automatically:
+
+```sh
+git config --add remote.origin.fetch 'refs/attestations/*:refs/attestations/*'
+```
+
+Deliberately non-force (no leading `+`): attestation refs are content-addressed
+and append-only ([supersession, not mutation](#supersession-not-mutation)), so a
+legitimately fetched ref never changes — a remote-side ref that *did* change
+should surface as a visible fetch refusal, not a silent local replacement. The
+**push** side stays an explicit command: writing a push refspec would change
+what a bare `git push` means.
+
 The error `no release attestation ref found under refs/attestations/<tag>/`
 almost always means the push above didn't happen — the tag traveled, its
 evidence didn't. (This repository's release workflow fails with exactly that

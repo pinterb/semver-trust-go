@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# .githooks/commit-msg — refuse any commit whose message lacks a well-formed
+# Provenance trailer (SemVer-Trust, spec §4.1). Enable it once per clone with:
+#   git config core.hooksPath .githooks
+#
+# Advisory only: anyone can skip it with `git commit --no-verify`. The enforcing
+# copy of this rule is CI and, ultimately, `semver-trust verify` itself, which
+# reads the trailers that actually entered history.
+if ! git interpret-trailers --parse "$1" | grep -Eq '^Provenance: (human|agent|mixed)$'; then
+  echo "commit rejected: missing or malformed 'Provenance:' trailer" >&2
+  echo "add one of:  Provenance: human | agent | mixed  (spec §4.1)" >&2
+  exit 1
+fi

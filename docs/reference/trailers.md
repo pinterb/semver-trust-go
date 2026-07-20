@@ -159,12 +159,19 @@ sufficient on its own.
 ## The commit-msg hook
 
 A local hook makes the trailer impossible to forget, for humans and agents
-alike — it inspects the final message, whichever channel produced it:
+alike — it inspects the final message, whichever channel produced it. This
+repository ships the hook in-tree at [`.githooks/commit-msg`](../../.githooks/commit-msg),
+so there is nothing to copy: enable it once per clone by pointing git at the
+committed hooks directory.
 
 ```sh
-#!/bin/sh
-# .git/hooks/commit-msg — refuse any commit whose message lacks a
-# well-formed Provenance trailer (SemVer-Trust, spec §4.1).
+git config core.hooksPath .githooks
+```
+
+The hook body is a few lines — it parses the message and refuses anything
+without a well-formed `Provenance:` trailer:
+
+```sh
 if ! git interpret-trailers --parse "$1" | grep -Eq '^Provenance: (human|agent|mixed)$'; then
   echo "commit rejected: missing or malformed 'Provenance:' trailer" >&2
   echo "add one of:  Provenance: human | agent | mixed  (spec §4.1)" >&2
@@ -172,8 +179,7 @@ if ! git interpret-trailers --parse "$1" | grep -Eq '^Provenance: (human|agent|m
 fi
 ```
 
-Install it with `chmod +x .git/hooks/commit-msg` (or distribute it via
-`core.hooksPath`). Verified behavior:
+Verified behavior:
 
 ```console
 $ git commit -m "feat: something"

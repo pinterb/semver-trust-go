@@ -134,9 +134,23 @@ then make the founding commit:
 printf 'Provenance: human\n' > .gitmessage
 git config commit.template .gitmessage
 
-git add -A
+git add .semver-trust .gitmessage
 git commit -m "chore: adopt semver-trust" -m "Provenance: human"
 ```
+
+Two ordering invariants make that founding commit clean — both about
+*sequence*, not content:
+
+- **Signing and the trailer template are configured before it** (the `git
+  config` lines above). An unsigned or untrailered first commit isn't fatal,
+  but it is the one mistake that recreates on day one the adoption-boundary
+  problem greenfield exists to avoid — and while the repository is still
+  unshared, `git rebase`-and-resign is the clean recovery (rewriting history is
+  only off-limits once a branch is shared or protected).
+- **It carries trust material alone** — `git add .semver-trust .gitmessage`,
+  never `git add -A`. The adoption and enrollment commits are what outside
+  reviewers re-derive later, so they should read as pure accountability acts,
+  not code changes with the trust material buried inside.
 
 Sanity-check the policy immediately:
 
@@ -247,6 +261,14 @@ you name them — [why](../reference/attestation-refs.md)):
 ```sh
 git push origin main --tags
 git push origin 'refs/attestations/*:refs/attestations/*'
+```
+
+Set the fetch refspec once so every later `git fetch`/`pull` pulls new evidence
+automatically — the push side stays an explicit command
+([why](../reference/attestation-refs.md#moving-them)):
+
+```sh
+git config --add remote.origin.fetch 'refs/attestations/*:refs/attestations/*'
 ```
 
 ## 8. Review, then promote — same commit, clean channel

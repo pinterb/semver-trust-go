@@ -77,6 +77,11 @@ When you author a commit here:
    working, not a low score. Do not retry, work around the verification, or
    touch the trust material: read the one-line reason, report it to your
    operator with the failing step, and stop.
+
+7. **In a repository that has no `.semver-trust/` yet, do not commit, and do not
+   bootstrap it yourself.** Setting up the policy and trust registries is a human
+   accountability act at the maximum-stakes founding commit that governs
+   everything downstream. Surface it to your operator and stop.
 ````
 
 ## The contract
@@ -103,6 +108,10 @@ When you author a commit here:
   through — these files are the root of trust and carry their own required
   level (spec §5.4). Read `.semver-trust/policy.toml` to know which paths
   those are.
+- In a repository that has **not** adopted the scheme (no `.semver-trust/`), you
+  MUST NOT commit or bootstrap it on your own — establishing the policy and
+  trust registries is a human act at the founding commit that governs everything
+  downstream. Surface it to your operator and stop.
 
 ## The block you emit
 

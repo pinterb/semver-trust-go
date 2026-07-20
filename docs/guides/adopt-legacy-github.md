@@ -65,7 +65,7 @@ enroll it:
 
 ```console
 $ curl -s https://github.com/departed-dev.gpg >> .semver-trust/gpg-keyring.asc
-$ git add -A && git commit -m "chore: enroll Pat's historical signing key" -m "Provenance: human"
+$ git add .semver-trust/gpg-keyring.asc && git commit -m "chore: enroll Pat's historical signing key" -m "Provenance: human"
 $ semver-trust verify --repo . --from '' --to HEAD --verify-time 2026-07-13T00:00:00Z
 Error: §10 step 3 (verify signature): verify 9a4617d...: commit is unsigned
 ```
