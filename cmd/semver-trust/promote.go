@@ -148,6 +148,7 @@ and prints the would-be promotion without writing anything.`,
 				return promoteSupersede(cmd, promoteSupersedeInputs{
 					repoPath: repoPath, policyPath: policyPath, component: component,
 					descriptorPath: bootstrapDescriptor, repositoryDigest: repositoryDigest,
+					allowedSigners: allowedSigners, gpgKeyring: gpgKeyring, attestationSigners: attestationSigners,
 					tag: tag, cleanVer: cleanVer, toCommit: toCommit, blastOverride: blast,
 					dryRun: dryRun, jsonOut: jsonOut, tagSigner: tagSigner, attSigner: attSigner,
 					taggerName: taggerName, taggerEmail: taggerEmail, at: at,
@@ -330,22 +331,25 @@ and prints the would-be promotion without writing anything.`,
 // promoteSupersedeInputs carries the v0.10 supersede path's parameters out of the
 // RunE closure (§7.3/§7.5/ADR-030).
 type promoteSupersedeInputs struct {
-	repoPath         string
-	policyPath       string
-	component        string
-	descriptorPath   string
-	repositoryDigest string
-	tag              string
-	cleanVer         version.Version
-	toCommit         string
-	blastOverride    string
-	dryRun           bool
-	jsonOut          bool
-	tagSigner        ssh.Signer
-	attSigner        ssh.Signer
-	taggerName       string
-	taggerEmail      string
-	at               time.Time
+	repoPath           string
+	policyPath         string
+	component          string
+	descriptorPath     string
+	repositoryDigest   string
+	allowedSigners     string
+	gpgKeyring         string
+	attestationSigners string
+	tag                string
+	cleanVer           version.Version
+	toCommit           string
+	blastOverride      string
+	dryRun             bool
+	jsonOut            bool
+	tagSigner          ssh.Signer
+	attSigner          ssh.Signer
+	taggerName         string
+	taggerEmail        string
+	at                 time.Time
 }
 
 // promoteSupersede runs the v0.10 promotion (§7.3/§7.5/ADR-030): it authenticates
@@ -367,10 +371,20 @@ func promoteSupersede(cmd *cobra.Command, in promoteSupersedeInputs) error {
 
 	// The attestation verifier is built from the policy in the superseded commit's
 	// tree; it fresh-verifies every stored release/v0.2 so the chain head is trusted,
-	// never claimed (§7.5/ADR-027).
+	// never claimed (§7.5/ADR-027). Bootstrap is set so AttestationVerifier enforces
+	// the v0.10 fail-closed rule: a filesystem trust-material override (passed through
+	// below) is rejected rather than silently honored when building the chain verifier
+	// — the chain head MUST be verified against descriptor-pinned material (§5.4/ADR-028).
 	av, err := verify.AttestationVerifier(verify.Options{
-		RepoPath: in.repoPath, To: in.toCommit, PolicyPath: in.policyPath,
-		Component: in.component, VerifyTime: in.at,
+		RepoPath:               in.repoPath,
+		To:                     in.toCommit,
+		PolicyPath:             in.policyPath,
+		Component:              in.component,
+		VerifyTime:             in.at,
+		Bootstrap:              desc,
+		AllowedSignersPath:     in.allowedSigners,
+		GPGKeyringPath:         in.gpgKeyring,
+		AttestationSignersPath: in.attestationSigners,
 	})
 	if err != nil {
 		return fmt.Errorf("promote refused: %w", err)
@@ -414,14 +428,17 @@ func promoteSupersede(cmd *cobra.Command, in promoteSupersedeInputs) error {
 	// Supersede re-runs the superseded's OWN interval via the caller-supplied anchor
 	// (its predecessor; nil → the descriptor's genesis interval). --------------
 	report, err := verify.Verify(verify.Options{
-		RepoPath:    in.repoPath,
-		To:          in.toCommit,
-		PolicyPath:  in.policyPath,
-		Component:   in.component,
-		VerifyTime:  in.at,
-		Bootstrap:   desc,
-		Supersede:   true,
-		Predecessor: anchor,
+		RepoPath:               in.repoPath,
+		To:                     in.toCommit,
+		PolicyPath:             in.policyPath,
+		Component:              in.component,
+		VerifyTime:             in.at,
+		Bootstrap:              desc,
+		Supersede:              true,
+		Predecessor:            anchor,
+		AllowedSignersPath:     in.allowedSigners,
+		GPGKeyringPath:         in.gpgKeyring,
+		AttestationSignersPath: in.attestationSigners,
 	})
 	if err != nil {
 		return fmt.Errorf("promote refused: %w", err)

@@ -124,10 +124,40 @@ func Verify(opts Options) (*Report, error) {
 	return verifyWith(opts, pol)
 }
 
+// rejectTrustMaterialOverrides fails closed in v0.10 (descriptor) mode when a
+// filesystem trust-material override is supplied. The bootstrap descriptor pins the
+// trust material by digest from TO's tree; a filesystem override would let unpinned
+// material verify commits/attestations while the transition only checks the tree
+// bytes it pinned — a key-substitution bypass (§5.4/ADR-028). Rejecting the
+// overrides guarantees the material USED for verification IS the material the
+// descriptor pins. Enforced at BOTH descriptor-mode entry points (verifyWith and
+// AttestationVerifier — the latter builds the chain verifier directly, bypassing
+// verifyWith), so no v0.10 caller can silently honor an override.
+func rejectTrustMaterialOverrides(opts Options) error {
+	if opts.Bootstrap == nil {
+		return nil
+	}
+	switch {
+	case opts.AllowedSignersPath != "":
+		return errors.New("--allowed-signers overrides the descriptor-pinned trust material; in v0.10 mode trust material is resolved from TO's tree only")
+	case opts.GPGKeyringPath != "":
+		return errors.New("--gpg-keyring overrides the descriptor-pinned trust material; in v0.10 mode trust material is resolved from TO's tree only")
+	case opts.AttestationSignersPath != "":
+		return errors.New("--attestation-signers overrides the descriptor-pinned trust material; in v0.10 mode trust material is resolved from TO's tree only")
+	}
+	return nil
+}
+
 // AttestationVerifier loads the policy from opts.To's tree and builds the
 // attestation verifier the pipeline uses. The supersede path (promote) needs it to
-// discover the accepted chain head (chain.SupersedeHead) before running Verify.
+// discover the accepted chain head (chain.SupersedeHead) before running Verify. In
+// v0.10 mode it rejects filesystem trust-material overrides (a key-substitution
+// bypass, §5.4/ADR-028): the chain head MUST be verified against descriptor-pinned
+// material, not an operator-supplied registry.
 func AttestationVerifier(opts Options) (*attest.Verifier, error) {
+	if err := rejectTrustMaterialOverrides(opts); err != nil {
+		return nil, abort(stepLoadPolicy, err)
+	}
 	policyBytes, err := readTreeFile(opts.RepoPath, opts.To, opts.PolicyPath)
 	if err != nil {
 		return nil, abort(stepLoadPolicy,
@@ -163,23 +193,8 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 		Adapter:   pol.GraphAdapter,
 	}
 
-	// In v0.10 mode the bootstrap descriptor pins the trust material by digest
-	// from TO's tree; a filesystem override would let unpinned material verify
-	// commits/attestations while the transition only checks the tree bytes it
-	// pinned — a key-substitution bypass (§5.4/ADR-028). Reject overrides here,
-	// so the material used for verification IS the material the descriptor pins.
-	if opts.Bootstrap != nil {
-		switch {
-		case opts.AllowedSignersPath != "":
-			return nil, abort(stepLoadPolicy, errors.New(
-				"--allowed-signers overrides the descriptor-pinned trust material; in v0.10 mode trust material is resolved from TO's tree only"))
-		case opts.GPGKeyringPath != "":
-			return nil, abort(stepLoadPolicy, errors.New(
-				"--gpg-keyring overrides the descriptor-pinned trust material; in v0.10 mode trust material is resolved from TO's tree only"))
-		case opts.AttestationSignersPath != "":
-			return nil, abort(stepLoadPolicy, errors.New(
-				"--attestation-signers overrides the descriptor-pinned trust material; in v0.10 mode trust material is resolved from TO's tree only"))
-		}
+	if err := rejectTrustMaterialOverrides(opts); err != nil {
+		return nil, abort(stepLoadPolicy, err)
 	}
 
 	keyring, err := resolvePGPKeyring(opts, pol, repo)

@@ -280,6 +280,48 @@ func TestPromoteSupersedeRefusesUnchangedEvidence(t *testing.T) {
 	}
 }
 
+// TestPromoteSupersedeRejectsTrustMaterialOverride: on the v0.10 supersede path the
+// descriptor pins trust material by digest from TO's tree, so a filesystem override
+// must be rejected FAIL-FAST — not silently ignored — matching the release/v0.10
+// key-substitution guard (§5.4/ADR-028). The rejection fires before the chain
+// verifier is built (AttestationVerifier) AND on the re-verification (Verify), so no
+// override can slip an unpinned key into either verification. Nothing is written.
+func TestPromoteSupersedeRejectsTrustMaterialOverride(t *testing.T) {
+	for _, tc := range []struct{ flag, value string }{
+		{"--allowed-signers", allowedSignersPath(t)},
+		{"--gpg-keyring", allowedSignersPath(t)}, // any non-empty path; rejected before it is read
+		{"--attestation-signers", bobAttestationSigners(t)},
+	} {
+		t.Run(tc.flag, func(t *testing.T) {
+			repo, descPath, _ := setupSupersedeChain(t)
+			tagsBefore, err := vcs.Tags(repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			refsBefore := attestationRefs(t, repo)
+
+			_, err = runCommand(t, "promote",
+				"--repo", repo, "--tag", "v0.1.0-t0.1",
+				"--bootstrap-descriptor", descPath,
+				"--repository-digest", "sha256:"+repoDigestHex,
+				tc.flag, tc.value,
+				"--verify-time", releaseEpoch,
+				"--tag-key", bobKeyPath(t), "--attest-key", bobKeyPath(t),
+				"--tagger-name", "alice", "--tagger-email", "alice@semver-trust.test")
+			if err == nil {
+				t.Fatalf("promote honored %s on the v0.10 path — a key-substitution bypass", tc.flag)
+			}
+			if !strings.Contains(err.Error(), "descriptor-pinned trust material") {
+				t.Errorf("error = %q, want the v0.10 trust-material-override rejection", err)
+			}
+			assertNoCleanTag(t, repo, tagsBefore)
+			if refsAfter := attestationRefs(t, repo); len(refsAfter) != len(refsBefore) {
+				t.Errorf("refused override stored something: before %v, after %v", refsBefore, refsAfter)
+			}
+		})
+	}
+}
+
 // TestPromoteSupersedeDryRunWritesNothing: --dry-run evaluates, decides, prints the
 // would-be superseding release/v0.2 (a schema-valid preview with emission.tag null),
 // and writes nothing — no clean tag, no attestation ref.
