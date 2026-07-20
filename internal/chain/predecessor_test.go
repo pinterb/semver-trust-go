@@ -122,6 +122,7 @@ type releaseSpec struct {
 	predecessor *version.Binding // nil at genesis
 	priorDigest *string          // "sha256:<hex>", nil at genesis
 	state       version.VersionState
+	action      string // version_state.action ("advance" if empty)
 	forceDigest string // override resulting_state.digest (bare hex) to synthesize tampering
 }
 
@@ -136,6 +137,10 @@ func emitAndStore(t *testing.T, repoPath string, signer ssh.Signer, schema []byt
 	wireDigest := digest
 	if spec.forceDigest != "" {
 		wireDigest = spec.forceDigest
+	}
+	specAction := spec.action
+	if specAction == "" {
+		specAction = "advance"
 	}
 
 	var predTag *attest.ReleaseTagIdentity
@@ -181,7 +186,7 @@ func emitAndStore(t *testing.T, repoPath string, signer ssh.Signer, schema []byt
 			AuthorityIdentity: attest.ReleaseDigestDescriptor{URI: "bootstrap:" + spec.component, Digest: map[string]string{"sha256": oid('f') + oid('f')}},
 		},
 		VersionState: attest.ReleaseVersionState{
-			Action:         "advance",
+			Action:         specAction,
 			Genesis:        spec.genesis,
 			Predecessor:    predTag,
 			PriorState:     priorState,
@@ -307,6 +312,64 @@ func TestAcceptedChainHeadAdvance(t *testing.T) {
 	}
 	if len(pins.MandatoryMetaPaths) != 1 || pins.MandatoryMetaPaths[0] != ".github/workflows/release.yml" {
 		t.Errorf("mandatory meta paths = %+v", pins.MandatoryMetaPaths)
+	}
+}
+
+// TestAcceptedChainHeadRecut pins the reader's recut baseline-carry: a recut's
+// canonical baseline is PRESERVED (the genesis's, here nil), while its on-wire
+// version_state.predecessor is the chain link (the re-cut prerelease). The two
+// differ, so the reader must carry the baseline forward from the last advance —
+// deriving it from version_state.predecessor would give the wrong baseline and the
+// digest would not reproduce.
+func TestAcceptedChainHeadRecut(t *testing.T) {
+	repo := initGitRepo(t)
+	signer := chainTestSigner(t)
+	schema := releaseSchema(t)
+
+	// Genesis PRERELEASE v0.1.0-t0.1: baseline nil, core 0.0.0, target 0.1.0.
+	c1 := mkCommit(t, repo, "genesis")
+	rawG, _ := mkTag(t, repo, "auth/v0.1.0-t0.1", c1)
+	gspec := releaseSpec{
+		repoID: "repo:test/auth", component: "auth", tagPrefix: "auth/",
+		to: c1, rawRefOID: rawG, emittedTag: "auth/v0.1.0-t0.1", genesis: true,
+		state: version.VersionState{
+			BaselineCore: "0.0.0", TargetCore: "0.1.0", TargetBump: "minor", CleanAccepted: false,
+			TargetIntervals: []string{version.GenesisIntervalID("auth", "inception")},
+			Iterations:      map[string]int{"T0": 1},
+		},
+	}
+	gd := emitAndStore(t, repo, signer, schema, gspec)
+
+	// RECUT v0.1.0-t0.2: same core, iteration 2, baseline PRESERVED (nil). The wire
+	// predecessor is the chain link (v0.1.0-t0.1); the canonical baseline is nil.
+	c2 := mkCommit(t, repo, "recut source")
+	rawR, _ := mkTag(t, repo, "auth/v0.1.0-t0.2", c2)
+	prior := "sha256:" + gd
+	rspec := releaseSpec{
+		repoID: "repo:test/auth", component: "auth", tagPrefix: "auth/",
+		to: c2, rawRefOID: rawR, emittedTag: "auth/v0.1.0-t0.2", genesis: false,
+		predecessor: &version.Binding{Tag: "auth/v0.1.0-t0.1", RefOID: rawG, CommitOID: c1},
+		priorDigest: &prior,
+		action:      "recut",
+		state: version.VersionState{
+			BaselineCore: "0.0.0", TargetCore: "0.1.0", TargetBump: "minor", CleanAccepted: false,
+			TargetIntervals: []string{version.GenesisIntervalID("auth", "inception"), c1 + ".." + c2},
+			Iterations:      map[string]int{"T0": 2},
+		},
+	}
+	emitAndStore(t, repo, signer, schema, rspec)
+
+	pred, err := AcceptedChainHead(repo, "repo:test/auth", "auth", chainVerifier(t, signer), chainEpoch)
+	if err != nil {
+		t.Fatalf("AcceptedChainHead: %v", err)
+	}
+	if pred == nil || pred.Tag() != "auth/v0.1.0-t0.2" {
+		t.Fatalf("head = %v, want auth/v0.1.0-t0.2", pred)
+	}
+	st := pred.VersionSelected().State
+	if st.Baseline != nil || st.BaselineCore != "0.0.0" || st.TargetCore != "0.1.0" {
+		t.Errorf("recut head state baseline=%+v core=%s target=%s, want nil/0.0.0/0.1.0 (preserved, not the chain predecessor)",
+			st.Baseline, st.BaselineCore, st.TargetCore)
 	}
 }
 
@@ -463,6 +526,38 @@ func TestAcceptedChainHeadForgedPredecessorRawRefAborts(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "does not match the linked release's emitted tag") {
 		t.Errorf("forged-raw-ref error = %v, want a predecessor-tag-identity mismatch abort", err)
 	}
+}
+
+// The reader accepts only supported chain actions: a self-consistent release/v0.2
+// with action "supersede" (attestation-only until C5) must NOT be reconstructed as
+// an advance-like chain head, and a genesis must be an advance, never a recut.
+func TestAcceptedChainHeadRejectsUnsupportedActions(t *testing.T) {
+	t.Run("supersede-on-chain", func(t *testing.T) {
+		repo := initGitRepo(t)
+		signer := chainTestSigner(t)
+		schema := releaseSchema(t)
+		gd := emitAndStore(t, repo, signer, schema, genesisSpec(oid('1'), oid('7')))
+		succ := advanceSpec(oid('1'), oid('7'), oid('2'), oid('8'), gd)
+		succ.action = "supersede"
+		emitAndStore(t, repo, signer, schema, succ)
+		_, err := AcceptedChainHead(repo, "repo:test/auth", "auth", chainVerifier(t, signer), chainEpoch)
+		if err == nil || !strings.Contains(err.Error(), "unsupported chain action") {
+			t.Errorf("supersede on the chain: error = %v, want an unsupported-chain-action abort", err)
+		}
+	})
+
+	t.Run("genesis-recut", func(t *testing.T) {
+		repo := initGitRepo(t)
+		signer := chainTestSigner(t)
+		schema := releaseSchema(t)
+		g := genesisSpec(oid('1'), oid('7'))
+		g.action = "recut"
+		emitAndStore(t, repo, signer, schema, g)
+		_, err := AcceptedChainHead(repo, "repo:test/auth", "auth", chainVerifier(t, signer), chainEpoch)
+		if err == nil || !strings.Contains(err.Error(), "genesis release") {
+			t.Errorf("genesis recut: error = %v, want a genesis-action abort", err)
+		}
+	})
 }
 
 // A release whose signed resulting_state.digest does not reproduce from its

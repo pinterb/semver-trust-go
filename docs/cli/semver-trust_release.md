@@ -35,6 +35,7 @@ semver-trust release [flags]
 ### Options
 
 ```
+      --action string                 version action (§7.5/ADR-029): advance (default, a new target core) or recut (re-cut an unpromoted prerelease target — same core, next iteration). recut requires --bootstrap-descriptor and an accepted prerelease predecessor (default "advance")
       --allowed-signers string        filesystem allowed-signers override; empty resolves the policy's identity.human.allowed_signers from TO's tree
       --attest-key string             OpenSSH private key signing the release attestation (attestation namespace; may equal --tag-key)
       --attestation-signers string    filesystem attestation-signer registry; overrides the policy. Empty resolves [identity] attestation_signers from TO's tree (§9); if the policy declares none either, reviews cannot be verified and classify none

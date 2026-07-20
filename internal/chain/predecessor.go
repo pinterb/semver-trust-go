@@ -226,19 +226,26 @@ func selectUniqueHead(releases []verifiedRelease) (verifiedRelease, error) {
 	}
 }
 
-// verifyCompleteChain walks genesis→head. For each release it reconstructs the
-// version.VersionState from the wire block and checks that its ADR-036 digest
-// reproduces the signed resulting_state.digest (catching a tampered or lying
-// emitter), then follows prior_state.digest to a known release and confirms the
-// version_state.predecessor tag matches that release's emitted tag. It returns the
-// head's reconstructed state (the recurring version authority's carried state).
+// verifyCompleteChain verifies the chain genesis→head and returns the head's
+// reconstructed carried-forward state. It collects the chain by following
+// prior_state.digest from the head (confirming each version_state.predecessor tag
+// identity — name, peeled AND raw ref OID — matches the linked release's emitted
+// tag; the raw ref matters because ADR-036 excludes emission from the digest, so a
+// self-consistent forged predecessor raw ref is caught only here), then walks it
+// forward reconstructing each state and checking its ADR-036 digest reproduces the
+// signed resulting_state.digest. The forward walk carries the BASELINE: an advance
+// sets the baseline to its version_state.predecessor, a recut PRESERVES it (its
+// canonical baseline is the last advance's, which differs from the chain
+// predecessor it links to), so the baseline cannot be read from one release's wire
+// alone.
 func verifyCompleteChain(head verifiedRelease, releases []verifiedRelease, component, tagPrefix string) (version.VersionState, error) {
 	byResult := make(map[string]verifiedRelease, len(releases))
 	for _, r := range releases {
 		byResult[r.resultDigest] = r
 	}
 
-	var headState version.VersionState
+	// Collect head→genesis, checking the linkage at each step.
+	var chainOrder []verifiedRelease // head-first; reversed to genesis-first below
 	cur := head
 	visited := map[string]bool{}
 	for {
@@ -246,34 +253,14 @@ func verifyCompleteChain(head verifiedRelease, releases []verifiedRelease, compo
 			return version.VersionState{}, fmt.Errorf("accepted-predecessor: chain cycle at %s", cur.tag)
 		}
 		visited[cur.resultDigest] = true
-
-		state, err := reconstructState(cur.doc, tagPrefix)
-		if err != nil {
-			return version.VersionState{}, fmt.Errorf("accepted-predecessor: reconstructing state for %s: %w", cur.tag, err)
-		}
-		var priorPtr *string
-		if cur.priorDigest != "" {
-			p := "sha256:" + cur.priorDigest
-			priorPtr = &p
-		}
-		got, err := version.StateDigest(version.CanonicalStateMap(component, tagPrefix, state, priorPtr))
-		if err != nil {
-			return version.VersionState{}, fmt.Errorf("accepted-predecessor: canonicalizing state for %s: %w", cur.tag, err)
-		}
-		if got != cur.resultDigest {
-			return version.VersionState{}, fmt.Errorf("accepted-predecessor: state digest for %s does not reproduce its signed resulting_state.digest (chain tampered, §8.1/ADR-036)", cur.tag)
-		}
-		if cur.resultDigest == head.resultDigest {
-			headState = state
-		}
+		chainOrder = append(chainOrder, cur)
 
 		if cur.doc.Predicate.VersionState.Genesis {
 			if cur.priorDigest != "" {
 				return version.VersionState{}, fmt.Errorf("accepted-predecessor: genesis release %s binds a prior_state — a genesis state has no predecessor (§7.5/ADR-029)", cur.tag)
 			}
-			return headState, nil
+			break
 		}
-
 		if cur.priorDigest == "" {
 			return version.VersionState{}, fmt.Errorf("accepted-predecessor: non-genesis release %s binds no prior_state — the chain link is missing", cur.tag)
 		}
@@ -281,14 +268,6 @@ func verifyCompleteChain(head verifiedRelease, releases []verifiedRelease, compo
 		if !ok {
 			return version.VersionState{}, fmt.Errorf("accepted-predecessor: %s names a predecessor state not present in the store — the chain is broken (§7.5/ADR-027)", cur.tag)
 		}
-		// The two linkages must agree: the tag the successor pins as its
-		// predecessor must be the previous release's emitted tag identity — in
-		// FULL: name, peeled commit OID, AND raw ref OID. The raw ref OID matters
-		// because ADR-036 excludes emission from resulting_state.digest, so the
-		// previous release's emission.tag.raw_ref_oid is not covered by its own
-		// signed digest; a successor that consistently binds a forged predecessor
-		// raw ref still reproduces its own digest, so this is the only place the
-		// forgery is caught.
 		prevEm := prev.doc.Predicate.VersionState.Emission.Tag
 		if prevEm == nil {
 			return version.VersionState{}, fmt.Errorf("accepted-predecessor: linked release %s binds no emission.tag", prev.tag)
@@ -303,28 +282,85 @@ func verifyCompleteChain(head verifiedRelease, releases []verifiedRelease, compo
 		}
 		cur = prev
 	}
+
+	// Walk genesis→head, carrying the baseline forward from the last advance.
+	var carriedBaseline *version.Binding
+	carriedBaselineCore := "0.0.0"
+	var headState version.VersionState
+	for i := len(chainOrder) - 1; i >= 0; i-- {
+		r := chainOrder[i]
+		vs := r.doc.Predicate.VersionState
+		// A chain member must carry a supported action for its position: genesis is
+		// always an advance; a recurring predecessor-chain release is advance or
+		// recut. supersede is an attestation-only re-evaluation, not a chain head —
+		// reject it here until the superseded-authority reader lands (#76 M6-C5), so
+		// a self-consistent supersede release cannot be reconstructed as an
+		// advance-like head, and a genesis cannot claim recut.
+		switch {
+		case vs.Genesis && vs.Action != "advance":
+			return version.VersionState{}, fmt.Errorf("accepted-predecessor: genesis release %s has action %q, want advance (§7.5/ADR-029)", r.tag, vs.Action)
+		case !vs.Genesis && vs.Action != "advance" && vs.Action != "recut":
+			return version.VersionState{}, fmt.Errorf("accepted-predecessor: release %s has unsupported chain action %q (only advance and recut are chain heads; supersede is attestation-only, #76 M6-C5)", r.tag, vs.Action)
+		}
+		var baseline *version.Binding
+		var baselineCore string
+		if vs.Action == "recut" {
+			// recut preserves the target and therefore its baseline.
+			baseline, baselineCore = carriedBaseline, carriedBaselineCore
+		} else {
+			// advance / genesis: the baseline is this release's version predecessor.
+			b, core, err := baselineFromPredecessor(vs)
+			if err != nil {
+				return version.VersionState{}, fmt.Errorf("accepted-predecessor: %s: %w", r.tag, err)
+			}
+			baseline, baselineCore = b, core
+			carriedBaseline, carriedBaselineCore = b, core
+		}
+
+		state, err := reconstructState(r.doc, baseline, baselineCore)
+		if err != nil {
+			return version.VersionState{}, fmt.Errorf("accepted-predecessor: reconstructing state for %s: %w", r.tag, err)
+		}
+		var priorPtr *string
+		if r.priorDigest != "" {
+			pd := "sha256:" + r.priorDigest
+			priorPtr = &pd
+		}
+		got, err := version.StateDigest(version.CanonicalStateMap(component, tagPrefix, state, priorPtr))
+		if err != nil {
+			return version.VersionState{}, fmt.Errorf("accepted-predecessor: canonicalizing state for %s: %w", r.tag, err)
+		}
+		if got != r.resultDigest {
+			return version.VersionState{}, fmt.Errorf("accepted-predecessor: state digest for %s does not reproduce its signed resulting_state.digest (chain tampered, §8.1/ADR-036)", r.tag)
+		}
+		if r.resultDigest == head.resultDigest {
+			headState = state
+		}
+	}
+	return headState, nil
+}
+
+// baselineFromPredecessor derives an advance/genesis baseline binding + core from
+// version_state.predecessor (nil → the synthetic 0.0.0 genesis baseline).
+func baselineFromPredecessor(vs versionStateDoc) (*version.Binding, string, error) {
+	if vs.Predecessor == nil {
+		return nil, "0.0.0", nil
+	}
+	pv, err := version.Parse(vs.Predecessor.Name)
+	if err != nil {
+		return nil, "", fmt.Errorf("predecessor tag %q: %w", vs.Predecessor.Name, err)
+	}
+	return &version.Binding{Tag: vs.Predecessor.Name, RefOID: vs.Predecessor.RawRefOID, CommitOID: vs.Predecessor.PeeledCommitOID},
+		fmt.Sprintf("%d.%d.%d", pv.Major, pv.Minor, pv.Patch), nil
 }
 
 // reconstructState rebuilds the version.VersionState a release canonicalized (its
-// resulting state) from the release/v0.2 wire block. baseline_core and
-// clean_accepted are not top-level wire fields but are recoverable: baseline_core
-// is the core of version_state.predecessor.name (or "0.0.0" for a new line), and
-// clean_accepted is whether the emitted tag carries no trust suffix. The
-// reconstruction mirrors how the emitter (release CLI) builds the state, so its
-// ADR-036 digest reproduces.
-func reconstructState(doc releaseV02Doc, tagPrefix string) (version.VersionState, error) {
+// resulting state) from its wire block plus the chain-carried baseline (advance:
+// its own version predecessor; recut: the preserved baseline). clean_accepted and
+// the iterations come from the emitted tag. The reconstruction mirrors how the
+// emitter (release CLI) builds the state, so its ADR-036 digest reproduces.
+func reconstructState(doc releaseV02Doc, baseline *version.Binding, baselineCore string) (version.VersionState, error) {
 	vs := doc.Predicate.VersionState
-
-	var baseline *version.Binding
-	baselineCore := "0.0.0"
-	if vs.Predecessor != nil {
-		baseline = &version.Binding{Tag: vs.Predecessor.Name, RefOID: vs.Predecessor.RawRefOID, CommitOID: vs.Predecessor.PeeledCommitOID}
-		pv, err := version.Parse(vs.Predecessor.Name)
-		if err != nil {
-			return version.VersionState{}, fmt.Errorf("predecessor tag %q: %w", vs.Predecessor.Name, err)
-		}
-		baselineCore = fmt.Sprintf("%d.%d.%d", pv.Major, pv.Minor, pv.Patch)
-	}
 
 	if vs.Emission.Tag == nil {
 		return version.VersionState{}, fmt.Errorf("a stored release binds no emission.tag (kind %q)", vs.Emission.Kind)
@@ -487,20 +523,23 @@ type releaseV02Doc struct {
 			Authority          string             `json:"authority"`
 			AuthorityIdentity  digestDescriptor   `json:"authority_identity"`
 		} `json:"policy_state"`
-		VersionState struct {
-			Action                 string             `json:"action"`
-			Genesis                bool               `json:"genesis"`
-			Predecessor            *tagIdentity       `json:"predecessor"`
-			PriorState             *stateIdentity     `json:"prior_state"`
-			ResultingState         stateIdentity      `json:"resulting_state"`
-			TargetCore             string             `json:"target_core"`
-			TargetBump             string             `json:"target_bump"`
-			Emission               tagEmission        `json:"emission"`
-			TargetLineage          []objectIdentity   `json:"target_lineage"`
-			Iteration              *int               `json:"iteration"`
-			PendingCorrectiveFloor *string            `json:"pending_corrective_floor"`
-		} `json:"version_state"`
+		VersionState versionStateDoc `json:"version_state"`
 	} `json:"predicate"`
+}
+
+// versionStateDoc is the release/v0.2 version_state wire block.
+type versionStateDoc struct {
+	Action                 string           `json:"action"`
+	Genesis                bool             `json:"genesis"`
+	Predecessor            *tagIdentity     `json:"predecessor"`
+	PriorState             *stateIdentity   `json:"prior_state"`
+	ResultingState         stateIdentity    `json:"resulting_state"`
+	TargetCore             string           `json:"target_core"`
+	TargetBump             string           `json:"target_bump"`
+	Emission               tagEmission      `json:"emission"`
+	TargetLineage          []objectIdentity `json:"target_lineage"`
+	Iteration              *int             `json:"iteration"`
+	PendingCorrectiveFloor *string          `json:"pending_corrective_floor"`
 }
 
 type attestSubject struct {
