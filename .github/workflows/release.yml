@@ -68,9 +68,20 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          ref=$(git for-each-ref "refs/attestations/${TAG}/*" --format='%(refname)' | head -1)
-          if [ -z "${ref}" ]; then
-            echo "::error::no release attestation ref under refs/attestations/${TAG}/ — run the release ceremony (docs/release-runbook.md or docs/recurring-release-runbook.md) before publishing."
+          # Collect EVERY blob under the tag subject (the ref namespace is
+          # content-addressed and can hold more than one), then require exactly one
+          # release envelope — so the facts below come from the tag's single release
+          # attestation, not an arbitrary/stale/extra blob a pushed ref could add.
+          att_dir="${RUNNER_TEMP}/tag-attestations"
+          rm -rf "${att_dir}"; mkdir -p "${att_dir}"
+          n=0
+          while read -r oid; do
+            [ -n "${oid}" ] || continue
+            git cat-file blob "${oid}" >"${att_dir}/${n}.json"
+            n=$((n + 1))
+          done < <(git for-each-ref "refs/attestations/${TAG}/*" --format='%(objectname)')
+          if [ "${n}" -eq 0 ]; then
+            echo "::error::no attestation ref under refs/attestations/${TAG}/ — run the release ceremony (docs/release-runbook.md or docs/recurring-release-runbook.md) before publishing."
             exit 1
           fi
           # The predicate type selects the verify path (default v0.1 vs the v0.10
@@ -78,18 +89,29 @@ jobs:
           # effective backstops the badge for a v0.2 tag, whose at-the-head verify is
           # promotion_required and so emits no report (see the verify step).
           #
-          # SECURITY: this blob is NOT yet signature/schema-verified, so every field is
-          # untrusted. Never eval or shell-interpolate it — parse it as data and write
+          # SECURITY: these blobs are NOT yet signature/schema-verified, so every field
+          # is untrusted. Never eval or shell-interpolate them — parse as data and write
           # the step outputs via GITHUB_OUTPUT's random-delimiter format, which a hostile
           # value cannot break out of to inject extra outputs. The values are re-checked
           # downstream (predicate by the case, timestamp by verify's RFC3339 parse,
           # effective by the T0-T3 guard before it reaches the badge).
-          git cat-file blob "$(git rev-parse "${ref}")" >"${RUNNER_TEMP}/attestation.json"
           python3 -c '
-          import base64, json, os, secrets, sys
-          ref, blob = sys.argv[1], sys.argv[2]
-          p = json.loads(base64.b64decode(json.load(open(blob))["payload"]))
-          pred = p["predicate"]
+          import base64, glob, json, os, secrets, sys
+          att_dir, tag = sys.argv[1], sys.argv[2]
+          releases = []
+          for f in sorted(glob.glob(os.path.join(att_dir, "*.json"))):
+              try:
+                  p = json.loads(base64.b64decode(json.load(open(f))["payload"]))
+              except Exception:
+                  continue
+              if str(p.get("predicateType", "")).startswith("https://semver-trust.dev/release/"):
+                  releases.append(p)
+          if len(releases) != 1:
+              print("::error::expected exactly one release attestation under "
+                    "refs/attestations/%s/, found %d — the tag-scoped store is ambiguous "
+                    "or tampered." % (tag, len(releases)))
+              sys.exit(1)
+          p = releases[0]; pred = p["predicate"]
           out = {
               "predicate": str(p["predicateType"]),
               "timestamp": str(pred["timestamp"]),
@@ -99,8 +121,9 @@ jobs:
               for k, v in out.items():
                   d = "ghd_" + secrets.token_hex(16)
                   fh.write("%s<<%s\n%s\n%s\n" % (k, d, v, d))
-          print("Predicate %s; recorded instant %s (from %s)." % (out["predicate"], out["timestamp"], ref))
-          ' "${ref}" "${RUNNER_TEMP}/attestation.json"
+          print("Release attestation under %s: predicate %s, recorded instant %s."
+                % (tag, out["predicate"], out["timestamp"]))
+          ' "${att_dir}" "${TAG}"
 
       - name: Verify this release (spec §10)
         id: verify
