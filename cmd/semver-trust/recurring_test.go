@@ -143,6 +143,29 @@ func TestVerifyChainHead(t *testing.T) {
 	if _, e := runCommand(t, "verify", "--repo", repo, "--to", "main", "--chain-head"); e == nil {
 		t.Error("verify --chain-head without --bootstrap-descriptor should be refused")
 	}
+
+	// A tampered descriptor is refused: --chain-head is self-contained — it
+	// authenticates the descriptor's pinned digests against TO's tree itself
+	// (§5.4/ADR-028), not merely on repository/component match.
+	raw, err := os.ReadFile(descPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d map[string]any
+	if err := json.Unmarshal(raw, &d); err != nil {
+		t.Fatal(err)
+	}
+	d["policy_digest"] = "sha256:" + strings.Repeat("0", 64)
+	b, _ := json.Marshal(d)
+	badPath := t.TempDir() + "/bad-descriptor.json"
+	if err := os.WriteFile(badPath, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, e := runCommand(t, "verify", "--repo", repo, "--to", "main",
+		"--bootstrap-descriptor", badPath, "--verify-time", releaseEpoch, "--chain-head"); e == nil ||
+		!strings.Contains(e.Error(), "does not bind") {
+		t.Errorf("tampered descriptor: error = %v, want a tree-binding refusal", e)
+	}
 }
 
 // TestVerifyRecurringAdvance is the C2a payoff: after a genesis release/v0.2 and a

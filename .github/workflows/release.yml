@@ -159,26 +159,12 @@ jobs:
             fi
             printf '%s' "${DESCRIPTOR}" >"${RUNNER_TEMP}/bootstrap-descriptor.json"
             desc="${RUNNER_TEMP}/bootstrap-descriptor.json"
-            # (a) The descriptor must authentically bind THIS tag's tree: its policy and
-            # trust-material digests are the committed-blob hashes. Verifying at the tag
-            # alone cannot check this — the at-the-head interval aborts (promotion_required)
-            # before the policy-transition step — so recompute and compare independently.
-            fail=0
-            want=$(jq -r '.policy_digest' "${desc}")
-            got="sha256:$(git cat-file blob "${TAG}:$(jq -r '.policy_path' "${desc}")" | sha256sum | cut -d' ' -f1)"
-            [ "${want}" = "${got}" ] || { echo "::error::descriptor policy_digest does not match ${TAG}'s tree."; fail=1; }
-            while IFS=$'\t' read -r path dig; do
-              g="sha256:$(git cat-file blob "${TAG}:${path}" | sha256sum | cut -d' ' -f1)"
-              [ "${dig}" = "${g}" ] || { echo "::error::descriptor trust_material[${path}] does not match ${TAG}'s tree."; fail=1; }
-            done < <(jq -r '.trust_material | to_entries[] | "\(.key)\t\(.value)"' "${desc}")
-            [ "${fail}" -eq 0 ] || exit 1
-            echo "Bootstrap descriptor binds ${TAG}'s tree."
-            # (b) Fresh-verify the whole chain and read the accepted head from the
-            # VERIFIED object (not a store blob): --chain-head validates every chain
-            # member's signature + hash-link and reports the unique head's tag and its
-            # recorded effective trust. The head MUST be this tag (else we would be
-            # publishing a non-head release), and the badge trust is the head's verified
-            # effective. This is the badge value coming from the same object the gate
+            # `verify --chain-head` is self-contained: it authenticates the descriptor
+            # against ${TAG}'s tree (§5.4/ADR-028 — policy + trust-material digests),
+            # fresh-verifies every chain member (signature + hash-link), and reports the
+            # unique accepted head from the VERIFIED object (not a store blob). The head
+            # MUST be this tag — else we would be publishing a non-head release — and the
+            # badge trust is the head's verified effective, the same object the gate
             # accepted.
             head=$(./semver-trust verify --repo . --to "${TAG}" \
               --bootstrap-descriptor "${desc}" --verify-time "${TS}" --chain-head --json)

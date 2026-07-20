@@ -86,9 +86,25 @@ the verifier.`,
 				if descriptor == nil {
 					return fmt.Errorf("verify refused: --chain-head requires --bootstrap-descriptor (the authenticated v0.10 chain authority)")
 				}
-				av, aerr := verify.AttestationVerifier(verify.Options{
-					RepoPath: repoPath, To: to, PolicyPath: policyPath, Component: component, VerifyTime: at,
-				})
+				opts := verify.Options{
+					RepoPath:               repoPath,
+					To:                     to,
+					PolicyPath:             policyPath,
+					AllowedSignersPath:     allowedSigners,
+					AttestationSignersPath: attestationSigners,
+					GPGKeyringPath:         gpgKeyring,
+					Component:              component,
+					VerifyTime:             at,
+					Bootstrap:              descriptor,
+				}
+				// Authenticate the descriptor against TO's tree and reject trust-material
+				// overrides BEFORE trusting the store — this path bypasses the interval
+				// pipeline's checkPolicyTransition, so it must do the §5.4/ADR-028 binding
+				// itself, or a stale/tampered descriptor could report a head.
+				if aerr := verify.AuthenticateBootstrapTree(opts); aerr != nil {
+					return fmt.Errorf("verify refused: %w", aerr)
+				}
+				av, aerr := verify.AttestationVerifier(opts)
 				if aerr != nil {
 					return fmt.Errorf("verify refused: %w", aerr)
 				}

@@ -170,6 +170,60 @@ func AttestationVerifier(opts Options) (*attest.Verifier, error) {
 	return buildAttestationVerifier(opts, pol, opts.RepoPath)
 }
 
+// AuthenticateBootstrapTree confirms the bootstrap descriptor authentically binds
+// TO's tree (§5.4/ADR-028): its policy_digest and per-registry trust_material digests
+// must be the committed-blob hashes, and no filesystem trust-material override may
+// substitute the pinned material. It is the standalone binding check the
+// interval-less chain-head reader (verify --chain-head) needs — that path reports the
+// accepted head directly and so bypasses checkPolicyTransition, which performs this
+// binding in the normal pipeline. A descriptor whose repository/component merely match
+// while its pinned digests do not bind the tree is rejected here.
+func AuthenticateBootstrapTree(opts Options) error {
+	if opts.Bootstrap == nil {
+		return abort(stepLoadPolicy, errors.New("no bootstrap descriptor to authenticate"))
+	}
+	if err := rejectTrustMaterialOverrides(opts); err != nil {
+		return abort(stepLoadPolicy, err)
+	}
+	policyBytes, err := readTreeFile(opts.RepoPath, opts.To, opts.PolicyPath)
+	if err != nil {
+		return abort(stepLoadPolicy,
+			fmt.Errorf("policy file %q not found in %s's tree: %w", opts.PolicyPath, opts.To, err))
+	}
+	pol, err := policy.Parse(policyBytes)
+	if err != nil {
+		return abort(stepLoadPolicy, err)
+	}
+	meta, err := MetaPolicyFromTree(pol, opts.PolicyPath, opts.RepoPath, opts.To)
+	if err != nil {
+		return abort(stepLoadPolicy, err)
+	}
+	if opts.Bootstrap.PolicyDigest != meta.Digest {
+		return abort(stepLoadPolicy, fmt.Errorf(
+			"bootstrap descriptor policy_digest %s does not bind %s's tree (%s) — §5.4/ADR-028",
+			opts.Bootstrap.PolicyDigest, opts.To, meta.Digest))
+	}
+	if !equalDigestMaps(opts.Bootstrap.TrustMaterial, meta.TrustMaterial) {
+		return abort(stepLoadPolicy, fmt.Errorf(
+			"bootstrap descriptor trust_material does not bind %s's tree — §5.4/ADR-028", opts.To))
+	}
+	return nil
+}
+
+// equalDigestMaps reports whether two path→digest maps are identical (same keys,
+// same values) — the descriptor's pinned trust material vs the tree's actual material.
+func equalDigestMaps(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if bv, ok := b[k]; !ok || bv != v {
+			return false
+		}
+	}
+	return true
+}
+
 // verifyWith runs §10 steps 2–7 against an already-loaded policy.
 func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 	at := opts.VerifyTime
