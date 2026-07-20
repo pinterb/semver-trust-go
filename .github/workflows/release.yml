@@ -77,20 +77,30 @@ jobs:
           # recurring chain, v0.2). timestamp is the recorded instant (ADR-018).
           # effective backstops the badge for a v0.2 tag, whose at-the-head verify is
           # promotion_required and so emits no report (see the verify step).
-          eval "$(git cat-file blob "$(git rev-parse "${ref}")" | python3 -c '
-          import json, base64, sys
-          p = json.loads(base64.b64decode(json.load(sys.stdin)["payload"]))
+          #
+          # SECURITY: this blob is NOT yet signature/schema-verified, so every field is
+          # untrusted. Never eval or shell-interpolate it — parse it as data and write
+          # the step outputs via GITHUB_OUTPUT's random-delimiter format, which a hostile
+          # value cannot break out of to inject extra outputs. The values are re-checked
+          # downstream (predicate by the case, timestamp by verify's RFC3339 parse,
+          # effective by the T0-T3 guard before it reaches the badge).
+          git cat-file blob "$(git rev-parse "${ref}")" >"${RUNNER_TEMP}/attestation.json"
+          python3 -c '
+          import base64, json, os, secrets, sys
+          ref, blob = sys.argv[1], sys.argv[2]
+          p = json.loads(base64.b64decode(json.load(open(blob))["payload"]))
           pred = p["predicate"]
-          print("PREDICATE=%s" % p["predicateType"])
-          print("TS=%s" % pred["timestamp"])
-          print("EFF=%s" % (pred.get("trust") or {}).get("effective", ""))
-          ')"
-          echo "Predicate ${PREDICATE}; recorded instant ${TS} (from ${ref})."
-          {
-            echo "timestamp=${TS}"
-            echo "predicate=${PREDICATE}"
-            echo "effective=${EFF}"
-          } >>"${GITHUB_OUTPUT}"
+          out = {
+              "predicate": str(p["predicateType"]),
+              "timestamp": str(pred["timestamp"]),
+              "effective": str((pred.get("trust") or {}).get("effective", "")),
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              for k, v in out.items():
+                  d = "ghd_" + secrets.token_hex(16)
+                  fh.write("%s<<%s\n%s\n%s\n" % (k, d, v, d))
+          print("Predicate %s; recorded instant %s (from %s)." % (out["predicate"], out["timestamp"], ref))
+          ' "${ref}" "${RUNNER_TEMP}/attestation.json"
 
       - name: Verify this release (spec §10)
         id: verify
@@ -164,6 +174,12 @@ jobs:
             echo "::error::unknown release predicate '${PREDICATE}'."
             exit 1
             ;;
+          esac
+          # Guard the effective level before it flows to the badge — for a v0.2 tag it
+          # came from the (untrusted) attestation, so constrain it to a real level.
+          case "${effective}" in
+            T0|T1|T2|T3) ;;
+            *) echo "::error::effective trust '${effective}' is not a valid level (T0-T3)."; exit 1 ;;
           esac
           echo "Verified at effective ${effective}."
           echo "effective=${effective}" >>"${GITHUB_OUTPUT}"
