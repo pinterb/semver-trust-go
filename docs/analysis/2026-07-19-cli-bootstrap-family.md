@@ -1,20 +1,20 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # CLI Bootstrap Family — Proposal and Adversarial Analysis
 
-**Date:** 2026-07-19  
-**Revised:** 2026-07-20 — corrected for #76 (the v0.10 production wiring, merged
-after the pin below): problem #11 / issue #70 is resolved, and the bootstrap
-descriptor now governs the recurring chain, not only the genesis boundary. This
-is a surgical correctness pass — the `file:line` references still point at the
-original pin and are not re-verified here (a full re-pin waits on the proposal
-advancing to implementation).  
-**Status:** Proposal; non-normative — nothing here changes the scheme or
-the implementation except through the repositories' issue, ADR, and
-conformance processes  
-**Specification target:** `semver-trust/spec@58ec2d9` (draft v0.10, the
-conformance pin recorded in `semver-trust-go/conformance/manifest.json`)  
-**Implementation target:** `semver-trust/semver-trust-go@71aec5a3ec0d` (the basis
-for the `file:line` references; #76 has since merged to `main`)
+- **Date:** 2026-07-19
+- **Revised:** 2026-07-20 — corrected for #76 (the v0.10 production wiring,
+  merged after the pin below): problem #11 / issue #70 is resolved, and the
+  bootstrap descriptor now governs the recurring chain, not only the genesis
+  boundary. This is a surgical correctness pass — the `file:line` references
+  still point at the original pin and are not re-verified here (a full re-pin
+  waits on the proposal advancing to implementation).
+- **Status:** Proposal; non-normative — nothing here changes the scheme or the
+  implementation except through the repositories' issue, ADR, and conformance
+  processes.
+- **Specification target:** `semver-trust/spec@58ec2d9` (draft v0.10, the
+  conformance pin recorded in `semver-trust-go/conformance/manifest.json`).
+- **Implementation target:** `semver-trust/semver-trust-go@71aec5a3ec0d` (the
+  basis for the `file:line` references; #76 has since merged to `main`).
 
 This document proposes that the `semver-trust` binary — which every
 maintainer, contributor, and agent already installs — help those constituents
