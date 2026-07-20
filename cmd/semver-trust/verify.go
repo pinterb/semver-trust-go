@@ -111,7 +111,11 @@ the verifier.`,
 				if av == nil {
 					return fmt.Errorf("verify refused: the policy declares no attestation signers, so the accepted chain cannot be verified (§9)")
 				}
-				head, herr := chain.AcceptedChainHead(repoPath, descriptor.Repository, descriptor.Component, av, at)
+				// Bind the reported head to THIS descriptor: the genesis release must
+				// record it as the bootstrap authority (§5.4/ADR-028), not merely share
+				// the repository/component. descriptor.Digest() is the descriptor's
+				// authority identity.
+				head, herr := chain.AcceptedChainHeadBoundTo(repoPath, descriptor.Repository, descriptor.Component, descriptor.Digest(), av, at)
 				if herr != nil {
 					return fmt.Errorf("verify refused: %w", herr)
 				}

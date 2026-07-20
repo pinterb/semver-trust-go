@@ -76,6 +76,22 @@ type verifiedRelease struct {
 // among ≥1 release), a broken link, a digest mismatch, or a missing/moved/recreated
 // head tag aborts.
 func AcceptedChainHead(repoPath, repository, component string, v *attest.Verifier, at time.Time) (*Predecessor, error) {
+	return acceptedHead(repoPath, repository, component, "", v, at)
+}
+
+// AcceptedChainHeadBoundTo is AcceptedChainHead that additionally binds the chain to
+// the supplied bootstrap descriptor: the genesis release MUST record that descriptor
+// as its §5.4/ADR-028 bootstrap authority — policy_state.authority == "bootstrap",
+// authority_identity.uri == "bootstrap:<component>", and authority_identity.digest ==
+// bootstrapDigest (the descriptor's Digest(), "sha256:<hex>"). It rejects a chain
+// that verifies internally but was bootstrapped by a DIFFERENT descriptor sharing the
+// same repository/component — the binding `verify --chain-head` needs so the reported
+// head is the one THIS descriptor authorized, not merely one with a matching subject.
+func AcceptedChainHeadBoundTo(repoPath, repository, component, bootstrapDigest string, v *attest.Verifier, at time.Time) (*Predecessor, error) {
+	return acceptedHead(repoPath, repository, component, bootstrapDigest, v, at)
+}
+
+func acceptedHead(repoPath, repository, component, bootstrapDigest string, v *attest.Verifier, at time.Time) (*Predecessor, error) {
 	envelopes, err := (attest.GitRefStore{Path: repoPath}).All()
 	if err != nil {
 		return nil, fmt.Errorf("accepted-predecessor: enumerating attestations: %w", err)
@@ -96,7 +112,7 @@ func AcceptedChainHead(repoPath, repository, component string, v *attest.Verifie
 
 	// tag_prefix is a chain invariant; take it from the head.
 	tagPrefix := head.doc.Predicate.Component.TagPrefix
-	states, err := verifyCompleteChain(head, releases, component, tagPrefix)
+	states, err := verifyCompleteChain(head, releases, component, tagPrefix, bootstrapDigest)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +176,7 @@ func SupersedeHead(repoPath, repository, component string, v *attest.Verifier, a
 		return nil, nil, err
 	}
 	tagPrefix := head.doc.Predicate.Component.TagPrefix
-	states, err := verifyCompleteChain(head, releases, component, tagPrefix)
+	states, err := verifyCompleteChain(head, releases, component, tagPrefix, "")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -285,7 +301,7 @@ func selectUniqueHead(releases []verifiedRelease) (verifiedRelease, error) {
 // canonical baseline is the last advance's, which differs from the chain
 // predecessor it links to), so the baseline cannot be read from one release's wire
 // alone.
-func verifyCompleteChain(head verifiedRelease, releases []verifiedRelease, component, tagPrefix string) (map[string]version.VersionState, error) {
+func verifyCompleteChain(head verifiedRelease, releases []verifiedRelease, component, tagPrefix, bootstrapDigest string) (map[string]version.VersionState, error) {
 	byResult := make(map[string]verifiedRelease, len(releases))
 	for _, r := range releases {
 		byResult[r.resultDigest] = r
@@ -305,6 +321,21 @@ func verifyCompleteChain(head verifiedRelease, releases []verifiedRelease, compo
 		if cur.doc.Predicate.VersionState.Genesis {
 			if cur.priorDigest != "" {
 				return nil, fmt.Errorf("accepted-predecessor: genesis release %s binds a prior_state — a genesis state has no predecessor (§7.5/ADR-029)", cur.tag)
+			}
+			// Bind the chain to the supplied bootstrap descriptor (§5.4/ADR-028): the
+			// genesis release must record THIS descriptor as its bootstrap authority.
+			// The chain's signatures/links can be internally consistent yet have been
+			// bootstrapped by a different descriptor with the same repository/component,
+			// so the descriptor→chain binding is proven HERE, against the genesis's
+			// authority identity, not merely by matching the subject.
+			if bootstrapDigest != "" {
+				ps := cur.doc.Predicate.PolicyState
+				gotDigest := "sha256:" + ps.AuthorityIdentity.Digest["sha256"]
+				wantURI := "bootstrap:" + component
+				if ps.Authority != "bootstrap" || ps.AuthorityIdentity.URI != wantURI || gotDigest != bootstrapDigest {
+					return nil, fmt.Errorf("accepted-predecessor: genesis release %s was not bootstrapped by the supplied descriptor (authority %q, identity %s %s; want bootstrap %s %s) — §5.4/ADR-028",
+						cur.tag, ps.Authority, ps.AuthorityIdentity.URI, gotDigest, wantURI, bootstrapDigest)
+				}
 			}
 			break
 		}

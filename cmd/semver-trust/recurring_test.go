@@ -166,6 +166,26 @@ func TestVerifyChainHead(t *testing.T) {
 		!strings.Contains(e.Error(), "does not bind") {
 		t.Errorf("tampered descriptor: error = %v, want a tree-binding refusal", e)
 	}
+
+	// A FOREIGN descriptor — same repository/component and its policy/trust-material
+	// still bind the tree, but different bytes (a different bootstrap authority
+	// identity) — is rejected: the chain was not bootstrapped by it (§5.4/ADR-028),
+	// even though everything about the current tree matches.
+	var d2 map[string]any
+	if err := json.Unmarshal(raw, &d2); err != nil {
+		t.Fatal(err)
+	}
+	d2["verification_profile"] = "a-different-verifier" // changes the descriptor bytes, not the tree binding
+	b2, _ := json.Marshal(d2)
+	foreignPath := t.TempDir() + "/foreign-descriptor.json"
+	if err := os.WriteFile(foreignPath, b2, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, e := runCommand(t, "verify", "--repo", repo, "--to", "main",
+		"--bootstrap-descriptor", foreignPath, "--verify-time", releaseEpoch, "--chain-head"); e == nil ||
+		!strings.Contains(e.Error(), "was not bootstrapped by the supplied descriptor") {
+		t.Errorf("foreign descriptor: error = %v, want a bootstrap-authority refusal", e)
+	}
 }
 
 // TestVerifyRecurringAdvance is the C2a payoff: after a genesis release/v0.2 and a
