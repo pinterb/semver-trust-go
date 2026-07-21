@@ -40,25 +40,29 @@ func catalogFamilies() []Check {
 
 // ---- shared helpers --------------------------------------------------------
 
-// parseRegistry fences and reads a policy-named allowed-signers registry from
-// the working tree, returning its entries (nil on any error — the caller decides
-// the severity).
-func parseRegistry(env *Env, relPath string) []sshsig.AllowedSigner {
+// readRegistry fences and reads a policy-named allowed-signers registry from the
+// working tree, returning its entries and the fence/read/parse error (so a check
+// can fail closed on a declared-but-uncheckable registry). A parsed-but-empty
+// registry is (nil, nil).
+func readRegistry(env *Env, relPath string) ([]sshsig.AllowedSigner, error) {
 	if relPath == "" {
-		return nil
+		return nil, nil
 	}
 	abs, err := pathfence.Resolve(env.Repo, relPath)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	data, err := os.ReadFile(abs)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	signers, err := sshsig.ParseAllowedSigners(data)
-	if err != nil {
-		return nil
-	}
+	return sshsig.ParseAllowedSigners(data)
+}
+
+// parseRegistry is readRegistry for callers that treat any error as "no
+// registry" — they are counterbalanced by registry/parse on allowed_signers.
+func parseRegistry(env *Env, relPath string) []sshsig.AllowedSigner {
+	signers, _ := readRegistry(env, relPath)
 	return signers
 }
 
@@ -142,8 +146,15 @@ func checkAttestationDistinct(env *Env) Result {
 	if !ok {
 		return skip("no loadable SSH signing key to compare")
 	}
+	signers, err := readRegistry(env, env.Policy.Identity.AttestationSigners)
+	if err != nil {
+		// This is the one check enforcing ADR-040's distinctness; a declared but
+		// uncheckable attestation registry must fail closed, not pass.
+		return fail("cannot verify two-key distinctness — attestation_signers unreadable: "+err.Error(),
+			"§9 (two-key separation)", "fix the attestation_signers registry")
+	}
 	fp := ssh.FingerprintSHA256(pub)
-	for _, s := range parseRegistry(env, env.Policy.Identity.AttestationSigners) {
+	for _, s := range signers {
 		if s.Key != nil && ssh.FingerprintSHA256(s.Key) == fp {
 			return fail("the commit signing key is also enrolled in attestation_signers — commit and attestation keys must be distinct (ADR-022/040)",
 				"§9 (two-key separation)", "use a separate attestation key: semver-trust enroll --attest-key <other>.pub")
@@ -278,14 +289,10 @@ func checkAdoptionBoundary(env *Env) Result {
 // ---- simulate/ -------------------------------------------------------------
 
 func checkSimulateClassify(env *Env) Result {
-	if env.Message == "" {
+	if len(env.Message) == 0 {
 		return skip("no --message to classify")
 	}
-	data, err := os.ReadFile(env.Message)
-	if err != nil {
-		return fail("cannot read --message "+env.Message+": "+err.Error(), "§10 step 3 (classify)", "check the path")
-	}
-	msg := string(data)
+	msg := string(env.Message)
 	prov := vcs.ParseTrailers(msg).Provenance()
 	required := env.Policy != nil && env.Policy.TrailersRequired
 	if prov == "" {

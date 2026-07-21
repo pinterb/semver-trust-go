@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -92,6 +93,21 @@ run and restricts the run to a side-effect-free subset.`,
 				return err
 			}
 
+			// Resolve --message (a commit-message file, or "-" for stdin) to its
+			// content here at the boundary; the simulate/classify check stays
+			// I/O-free. --message is a user-supplied path, not a policy-named repo
+			// path, so it is read directly (not fenced).
+			var msgBytes []byte
+			if messageF == "-" {
+				if msgBytes, err = io.ReadAll(cmd.InOrStdin()); err != nil {
+					return err
+				}
+			} else if messageF != "" {
+				if msgBytes, err = os.ReadFile(messageF); err != nil {
+					return fmt.Errorf("--message %q: %w", messageF, err)
+				}
+			}
+
 			env := &preflight.Env{
 				Repo:       repoPath,
 				Persona:    persona,
@@ -103,7 +119,7 @@ run and restricts the run to a side-effect-free subset.`,
 				Git:        git,
 				Staged:     staged,
 				Commit:     commitRev,
-				Message:    messageF,
+				Message:    msgBytes,
 			}
 
 			report := preflight.Run(env, preflight.Catalog())

@@ -104,10 +104,12 @@ type Env struct {
 	// git binary (ADR-042).
 	Git *GitConfig
 
-	// Simulate inputs.
+	// Simulate inputs. Message is the commit-message content to classify (nil
+	// when no --message was supplied), resolved at the command boundary from a
+	// file or stdin — checks stay clock- and I/O-free.
 	Staged  bool
 	Commit  string
-	Message string
+	Message []byte
 }
 
 // Check is one diagnostic. Personas lists who runs it.

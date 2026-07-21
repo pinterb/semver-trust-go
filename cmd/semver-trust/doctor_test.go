@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,5 +95,17 @@ func TestDoctorCommand(t *testing.T) {
 	}
 	if !strings.Contains(dout, "could not be loaded") || strings.Contains(dout, "no policy at") {
 		t.Errorf("a directory policy path should surface the read error, not \"no policy\":\n%s", dout)
+	}
+
+	// --message - reads the commit message from stdin (the documented contract).
+	root := newRootCmd()
+	var mout, merr bytes.Buffer
+	root.SetOut(&mout)
+	root.SetErr(&merr)
+	root.SetIn(strings.NewReader("subject\n\nProvenance: human\n"))
+	root.SetArgs([]string{"doctor", "--repo", repo, "--message", "-"})
+	_ = root.Execute()
+	if !strings.Contains(mout.String(), "simulate/classify") || !strings.Contains(mout.String(), "Provenance: human") {
+		t.Errorf("--message - should classify the stdin message:\n%s", mout.String())
 	}
 }

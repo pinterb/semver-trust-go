@@ -127,6 +127,16 @@ func TestKeysChecks(t *testing.T) {
 	if r := checkAttestationDistinct(envFor(t, repo2, Maintainer)); r.Severity != FAIL {
 		t.Errorf("attestation-distinct (shared key) = %s, want FAIL", r.Severity)
 	}
+
+	// A declared-but-unreadable attestation registry must fail closed, not PASS
+	// (the one check enforcing ADR-040 distinctness).
+	repo3, _ := doctorRepo(t, `".semver-trust/**"`, "distinct")
+	if err := os.Remove(filepath.Join(repo3, ".semver-trust", "attestation_signers")); err != nil {
+		t.Fatal(err)
+	}
+	if r := checkAttestationDistinct(envFor(t, repo3, Maintainer)); r.Severity != FAIL {
+		t.Errorf("attestation-distinct (unreadable registry) = %s, want FAIL (fail closed)", r.Severity)
+	}
 }
 
 func TestRegistryChecks(t *testing.T) {
@@ -176,28 +186,25 @@ func mustRepo(t *testing.T, metaPaths string) string {
 }
 
 func TestSimulateClassify(t *testing.T) {
-	repo := t.TempDir()
-	env := &Env{Repo: repo, Persona: Maintainer, At: time.Now()}
-
-	writeMsg := func(name, content string) string {
-		p := filepath.Join(repo, name)
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return p
-	}
+	env := &Env{Persona: Maintainer, At: time.Now()}
 
 	// A message whose final paragraph is a valid Provenance trailer → PASS.
-	env.Message = writeMsg("good.txt", "subject line\n\nbody\n\nProvenance: human\n")
+	env.Message = []byte("subject line\n\nbody\n\nProvenance: human\n")
 	if r := checkSimulateClassify(env); r.Severity != PASS {
 		t.Errorf("classify (good) = %s %q, want PASS", r.Severity, r.Message)
 	}
 
 	// A message that mentions Provenance but not as the final paragraph → the
 	// silent-floor trap → FAIL.
-	env.Message = writeMsg("bad.txt", "subject\n\nProvenance: human\n\nmore body after the trailer\n")
+	env.Message = []byte("subject\n\nProvenance: human\n\nmore body after the trailer\n")
 	if r := checkSimulateClassify(env); r.Severity != FAIL {
 		t.Errorf("classify (misplaced trailer) = %s %q, want FAIL", r.Severity, r.Message)
+	}
+
+	// No message → SKIP.
+	env.Message = nil
+	if r := checkSimulateClassify(env); r.Severity != SKIP {
+		t.Errorf("classify (none) = %s, want SKIP", r.Severity)
 	}
 }
 
