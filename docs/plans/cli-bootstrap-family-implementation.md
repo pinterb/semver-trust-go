@@ -37,7 +37,7 @@ Status of the milestones, updated as each lands.
 | Milestone | Status | PR |
 |---|---|---|
 | M0 — governing ADRs | Not started | — |
-| M1 — P0 seam extraction | In review | `refactor-p0-verify-seams` |
+| M1 — P0 seam extraction | Done | #125 |
 | M2 — `doctor` | Not started (gated on M0) | — |
 | M3 — `enroll` | Not started (gated on M0) | — |
 | M4 — `setup` | Not started (gated on M0) | — |
