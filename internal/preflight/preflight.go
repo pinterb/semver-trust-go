@@ -114,10 +114,13 @@ type Env struct {
 
 	// Simulate inputs. Message is the commit-message content to classify (nil
 	// when no --message was supplied), resolved at the command boundary from a
-	// file or stdin — checks stay clock- and I/O-free.
-	Staged  bool
-	Commit  string
-	Message []byte
+	// file or stdin — checks stay clock- and I/O-free. EnrollmentLine is a candidate
+	// allowed-signers line to dry-run through the strict parser + Resolve, before the
+	// enrollment PR exists.
+	Staged         bool
+	Commit         string
+	Message        []byte
+	EnrollmentLine []byte
 }
 
 // Check is one diagnostic. Personas lists who runs it.

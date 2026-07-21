@@ -3,6 +3,8 @@
 package preflight
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -11,7 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/ssh"
+
 	"github.com/semver-trust/semver-trust-go/internal/chain"
+	"github.com/semver-trust/semver-trust-go/internal/sshsig"
 	"github.com/semver-trust/semver-trust-go/internal/verify"
 )
 
@@ -287,6 +292,37 @@ func TestFetchRefspec(t *testing.T) {
 	}
 	if r := checkFetchRefspec(envFor(t, repo, Maintainer)); r.Severity != PASS {
 		t.Errorf("fetch-refspec (configured) = %s %q, want PASS", r.Severity, r.Message)
+	}
+}
+
+func TestEnrollmentLineCheck(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := ssh.NewSignerFromKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, err := sshsig.FormatEnrollmentLine("alex@example.com", "git", signer.PublicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A well-formed line resolves in its declared namespace → PASS.
+	env := &Env{At: time.Now(), EnrollmentLine: []byte(line + "\n")}
+	if r := checkEnrollmentLine(env); r.Severity != PASS {
+		t.Errorf("enrollment-line (valid) = %s %q, want PASS", r.Severity, r.Message)
+	}
+	// A malformed line (the problem #2 shape) → FAIL.
+	env.EnrollmentLine = []byte("this is not a valid signer line\n")
+	if r := checkEnrollmentLine(env); r.Severity != FAIL {
+		t.Errorf("enrollment-line (malformed) = %s, want FAIL", r.Severity)
+	}
+	// No candidate → SKIP.
+	env.EnrollmentLine = nil
+	if r := checkEnrollmentLine(env); r.Severity != SKIP {
+		t.Errorf("enrollment-line (none) = %s, want SKIP", r.Severity)
 	}
 }
 

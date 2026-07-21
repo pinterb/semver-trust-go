@@ -32,6 +32,7 @@ func catalogSoftTier() []Check {
 		{ID: "keys/sign-roundtrip", Personas: mc, Run: checkSignRoundtrip},
 		{ID: "simulate/meta-touch", Personas: all, Run: checkMetaTouch},
 		{ID: "simulate/staged-purity", Personas: mc, Run: checkStagedPurity},
+		{ID: "simulate/enrollment-line", Personas: mc, Run: checkEnrollmentLine},
 		{ID: "trust/agent-provenance", Personas: m, Run: checkAgentProvenance},
 		{ID: "history/pre-adoption", Personas: mc, Run: checkPreAdoption},
 		{ID: "chain/chain-head", Personas: m, Run: checkChainHead},
@@ -207,6 +208,38 @@ func checkStagedPurity(env *Env) Result {
 			"stage the trust-material change as its own commit")
 	}
 	return pass("staged changes are pure (all meta, or all ordinary)")
+}
+
+func checkEnrollmentLine(env *Env) Result {
+	if len(env.EnrollmentLine) == 0 {
+		return skip("no --enrollment-line to check")
+	}
+	// Dry-run a candidate registry line through the verifier's own strict parser
+	// before the enrollment PR exists. A malformed line — the classic problem #2,
+	// an unquoted namespaces=git that the parser reads as the wrong field — is caught
+	// here, in front of the human, not at a later verify abort.
+	signers, err := sshsig.ParseAllowedSigners(env.EnrollmentLine)
+	if err != nil {
+		return fail("candidate enrollment line does not parse: "+err.Error(),
+			"§10 step 3 (verify signature)", `check the format — the namespace must be quoted: namespaces="git"`)
+	}
+	if len(signers) == 0 {
+		return skip("no enrollment line found (only blanks/comments)")
+	}
+	// Each candidate key must resolve in its own declared namespace at the diagnosis
+	// instant — the same resolver verification uses. A line that parses but does not
+	// resolve (a mistyped/omitted namespace, an inverted validity window) surfaces here.
+	for _, s := range signers {
+		ns := vcs.GitSSHNamespace
+		if len(s.Namespaces) > 0 {
+			ns = s.Namespaces[0]
+		}
+		if _, rerr := sshsig.Resolve(s.Key, signers, ns, env.At); rerr != nil {
+			return fail("candidate line parses but does not resolve in namespace "+ns+": "+rerr.Error(),
+				"§10 step 3 (verify signature)", "check the namespace and the enrollment validity window")
+		}
+	}
+	return pass(fmt.Sprintf("candidate enrollment line resolves (%d signer(s))", len(signers)))
 }
 
 // ---- trust/ ----------------------------------------------------------------

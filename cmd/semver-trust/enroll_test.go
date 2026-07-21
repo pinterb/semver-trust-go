@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"os"
@@ -13,6 +14,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/semver-trust/semver-trust-go/internal/pgp"
+	"github.com/semver-trust/semver-trust-go/internal/pgp/pgptest"
 	"github.com/semver-trust/semver-trust-go/internal/sshsig"
 )
 
@@ -30,6 +33,7 @@ attestation_signers = ".semver-trust/attestation_signers"
 
 [identity.human]
 allowed_signers = ".semver-trust/allowed_signers"
+gpg_keyring     = ".semver-trust/gpg-keyring.asc"
 `
 
 // enrollRepo builds a temp repo with the enroll policy and a git identity, and
@@ -195,6 +199,94 @@ func TestEnrollMultiTargetWriteRefused(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(repo, ".semver-trust", "allowed_signers")); !os.IsNotExist(statErr) {
 		t.Error("a refused multi-target --write must not write any registry")
+	}
+}
+
+func TestEnrollGPG(t *testing.T) {
+	repo, _, _ := enrollRepo(t)
+	e, err := pgptest.NewSigner("Gpg User", "gpguser@example.com", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	armored, err := pgptest.ArmoredKeyring(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath := filepath.Join(t.TempDir(), "gpg.asc")
+	if err := os.WriteFile(keyPath, armored, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	keyring := filepath.Join(repo, ".semver-trust", "gpg-keyring.asc")
+
+	// Print-by-default: the armored block on stdout; the principal diff on stderr;
+	// no write.
+	out, errOut, err := runRoot(t, "enroll", "--repo", repo, "--gpg-pubkey", keyPath)
+	if err != nil {
+		t.Fatalf("enroll --gpg-pubkey: %v", err)
+	}
+	if !strings.Contains(out, "PGP PUBLIC KEY BLOCK") {
+		t.Errorf("stdout should carry the armored block:\n%s", out)
+	}
+	if !strings.Contains(errOut, "gpguser@example.com") {
+		t.Errorf("stderr should disclose the added principal:\n%s", errOut)
+	}
+	if _, statErr := os.Stat(keyring); !os.IsNotExist(statErr) {
+		t.Error("print-by-default must not write the keyring")
+	}
+
+	// --write creates the keyring; it parses.
+	if _, _, err := runRoot(t, "enroll", "--repo", repo, "--gpg-pubkey", keyPath, "--write"); err != nil {
+		t.Fatalf("enroll --gpg-pubkey --write: %v", err)
+	}
+	kr, err := os.ReadFile(keyring)
+	if err != nil {
+		t.Fatalf("keyring not written: %v", err)
+	}
+	if _, err := pgp.ParseKeyring(kr); err != nil {
+		t.Errorf("written keyring does not parse: %v", err)
+	}
+	// A second identical --write adds nothing → refusal.
+	if _, _, err := runRoot(t, "enroll", "--repo", repo, "--gpg-pubkey", keyPath, "--write"); err == nil {
+		t.Error("re-enrolling the same gpg key should refuse (nothing to add)")
+	}
+
+	// --gpg-pubkey - reads the armored key from stdin (into a fresh repo).
+	repo2, _, _ := enrollRepo(t)
+	root := newRootCmd()
+	var sout, serr bytes.Buffer
+	root.SetOut(&sout)
+	root.SetErr(&serr)
+	root.SetIn(bytes.NewReader(armored))
+	root.SetArgs([]string{"enroll", "--repo", repo2, "--gpg-pubkey", "-"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("enroll --gpg-pubkey - (stdin): %v", err)
+	}
+	if !strings.Contains(sout.String(), "PGP PUBLIC KEY BLOCK") {
+		t.Errorf("stdin gpg should print the armored block:\n%s", sout.String())
+	}
+}
+
+// The enroll-adjacent doctor check: doctor --enrollment-line - dry-runs a candidate
+// registry line (the enroll output) through the strict parser + Resolve.
+func TestDoctorEnrollmentLine(t *testing.T) {
+	repo, _, pub := enrollRepo(t)
+	line, err := sshsig.FormatEnrollmentLine("alex@example.com", "git", pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	root := newRootCmd()
+	var out, errBuf bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errBuf)
+	root.SetIn(strings.NewReader(line + "\n"))
+	root.SetArgs([]string{"doctor", "--repo", repo, "--enrollment-line", "-"})
+	_ = root.Execute()
+	if !strings.Contains(out.String(), "simulate/enrollment-line") {
+		t.Errorf("doctor should run the enrollment-line check:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "PASS  simulate/enrollment-line") {
+		t.Errorf("a well-formed line should PASS enrollment-line:\n%s", out.String())
 	}
 }
 

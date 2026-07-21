@@ -5,7 +5,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -29,6 +31,7 @@ func newEnrollCmd() *cobra.Command {
 		email      string
 		commitKey  string
 		attestKey  string
+		gpgPubkey  string
 		policyPath string
 		write      bool
 		dryRun     bool
@@ -42,25 +45,24 @@ prints it — raw registry bytes on stdout, all guidance on stderr. It never sta
 commits, or signs: the tool generates and validates; the human enrolls, commits,
 and signs (ADR-038).
 
-The principal defaults from git user.email (the same identity your commits carry),
-so the registry principal equals your commit identity by construction. Namespaces
-come from compiled constants, so the "git" / attestation namespace can never be
-mistyped.
+A --commit-key / --attest-key is an SSH public key; its principal defaults from git
+user.email (the same identity your commits carry), so the registry principal equals
+your commit identity by construction. Namespaces come from compiled constants, so
+the "git" / attestation namespace can never be mistyped. --gpg-pubkey enrolls an
+armored OpenPGP public key you exported yourself (gpg --armor --export <keyid>);
+the tool never shells out to gpg, never takes a bare key id, and refuses private-key
+material. Export to a file and inspect it before enrolling — a one-line
+network-to-trust-root pipe is exactly the ceremony this command exists to slow down.
 
---write appends the line to the working-tree registry named by the policy, under
-the atomic writer contract (ADR-039): a repo-relative path fence, no directory
-creation, a strict re-parse of the whole result, and a temp-file + fsync + rename.
---dry-run makes zero filesystem changes and prints exactly what --write would do.`,
+--write appends to the working-tree registry named by the policy, under the atomic
+writer contract (ADR-039): a repo-relative path fence, no directory creation, a
+strict re-parse of the whole result, and a temp-file + fsync + rename. --dry-run
+makes zero filesystem changes and prints exactly what --write would do.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// The clock is read once here at the process boundary (ADR-018); it feeds
 			// the enrollment self-check's validity window.
 			at := time.Now()
-
-			principal, principalNote, err := resolvePrincipal(email, repoPath)
-			if err != nil {
-				return err
-			}
 
 			pol, err := loadEnrollPolicy(repoPath, policyPath)
 			if err != nil {
@@ -74,8 +76,21 @@ creation, a strict re-parse of the whole result, and a temp-file + fsync + renam
 			if attestKey != "" {
 				targets++
 			}
+			if gpgPubkey != "" {
+				targets++
+			}
 			if targets == 0 {
-				return errors.New("enroll: at least one of --commit-key or --attest-key is required")
+				return errors.New("enroll: at least one of --commit-key, --attest-key, or --gpg-pubkey is required")
+			}
+
+			// The principal (an SSH allowed-signers identity) is needed only for the
+			// SSH targets; a GPG key carries its own user-ID, so a --gpg-pubkey-only
+			// enroll never consults git user.email.
+			var principal, principalNote string
+			if commitKey != "" || attestKey != "" {
+				if principal, principalNote, err = resolvePrincipal(email, repoPath); err != nil {
+					return err
+				}
 			}
 
 			// --write is atomic per file, but a batch of registries is NOT: a
@@ -124,6 +139,15 @@ creation, a strict re-parse of the whole result, and a temp-file + fsync + renam
 				seen[e.result.Fingerprint] = e.flag
 			}
 
+			var gpgPending *gpgEnrollment
+			if gpgPubkey != "" {
+				g, err := buildGPGTarget(cmd, repoPath, gpgPubkey, pol.Identity.Human.GPGKeyring)
+				if err != nil {
+					return err
+				}
+				gpgPending = g
+			}
+
 			so := &errWriter{w: cmd.OutOrStdout()}
 			se := &errWriter{w: cmd.ErrOrStderr()}
 
@@ -131,14 +155,24 @@ creation, a strict re-parse of the whole result, and a temp-file + fsync + renam
 			for _, e := range pending {
 				so.println(e.result.Line)
 			}
+			if gpgPending != nil {
+				so.printf("%s", gpgPending.candidate)
+			}
 
 			// All guidance, disclosure, and warnings on stderr.
-			se.printf("\nprincipal: %s %s\n", principal, principalNote)
+			if len(pending) > 0 {
+				se.printf("\nprincipal: %s %s\n", principal, principalNote)
+			}
 			for _, e := range pending {
 				se.printf("%s → %s  (fingerprint %s)\n", e.flag, e.relPath, e.result.Fingerprint)
 				if e.result.Warn != "" {
 					se.printf("  warn: %s\n", e.result.Warn)
 				}
+			}
+			if gpgPending != nil {
+				se.printf("\n--gpg-pubkey → %s\n", gpgPending.relPath)
+				se.printf("  adds principal(s):   %s\n", strings.Join(gpgPending.result.NewPrincipals, ", "))
+				se.printf("  adds fingerprint(s): %s\n", strings.Join(gpgPending.result.NewFingerprints, ", "))
 			}
 			se.println("\nThe tool never stages, commits, or signs (ADR-038). To enroll, either:")
 			se.println("  • paste the printed line into your enrollment PR;")
@@ -150,9 +184,12 @@ creation, a strict re-parse of the whole result, and a temp-file + fsync + renam
 
 			switch {
 			case dryRun:
-				se.println("\n--dry-run: no files were modified. --write would append the printed line(s) to:")
+				se.println("\n--dry-run: no files were modified. --write would append the printed material to:")
 				for _, e := range pending {
 					se.printf("  %s\n", e.relPath)
+				}
+				if gpgPending != nil {
+					se.printf("  %s\n", gpgPending.relPath)
 				}
 			case write:
 				for _, e := range pending {
@@ -160,6 +197,12 @@ creation, a strict re-parse of the whole result, and a temp-file + fsync + renam
 						return err
 					}
 					se.printf("\nwrote %s — now commit it: git add .semver-trust && git commit -S\n", e.relPath)
+				}
+				if gpgPending != nil {
+					if err := enroll.WriteRegistry(repoPath, gpgPending.relPath, gpgPending.result.NewContent); err != nil {
+						return err
+					}
+					se.printf("\nwrote %s — now commit it: git add .semver-trust && git commit -S\n", gpgPending.relPath)
 				}
 			}
 
@@ -175,6 +218,7 @@ creation, a strict re-parse of the whole result, and a temp-file + fsync + renam
 	f.StringVar(&email, "email", "", "principal to enroll (default: git user.email)")
 	f.StringVar(&commitKey, "commit-key", "", "path to an SSH public key to enroll as a commit signer")
 	f.StringVar(&attestKey, "attest-key", "", "path to an SSH public key to enroll as an attestation signer")
+	f.StringVar(&gpgPubkey, "gpg-pubkey", "", "path to an armored OpenPGP public key to enroll (- for stdin)")
 	f.StringVar(&policyPath, "policy", ".semver-trust/policy.toml", "policy file path within the repository")
 	f.BoolVar(&write, "write", false, "append the line to the working-tree registry (atomic)")
 	f.BoolVar(&dryRun, "dry-run", false, "print exactly what --write would do; change nothing")
@@ -246,6 +290,45 @@ func buildSSHTarget(repo, keyPath, flag, targetRel, targetName, crossRel, namesp
 		return enrollment{}, fmt.Errorf("%s: %w", flag, err)
 	}
 	return enrollment{flag: flag, relPath: targetRel, result: res}, nil
+}
+
+// gpgEnrollment pairs a built GPG keyring result with the keyring it targets and the
+// raw candidate bytes — the validated material printed for `>>` redirection.
+type gpgEnrollment struct {
+	relPath   string
+	candidate []byte
+	result    *enroll.GPGResult
+}
+
+// buildGPGTarget reads the armored candidate (a file, or "-" for stdin) and builds
+// the GPG keyring enrollment against the policy-named gpg_keyring.
+func buildGPGTarget(cmd *cobra.Command, repo, src, targetRel string) (*gpgEnrollment, error) {
+	if targetRel == "" {
+		return nil, errors.New("enroll: policy declares no [identity.human] gpg_keyring registry (needed for --gpg-pubkey)")
+	}
+	candidate, err := readKeyInput(cmd, src)
+	if err != nil {
+		return nil, fmt.Errorf("--gpg-pubkey %q: %w", src, err)
+	}
+	existing, err := readFencedRegistry(repo, targetRel)
+	if err != nil {
+		return nil, err
+	}
+	res, err := enroll.BuildGPG(candidate, existing)
+	if err != nil {
+		return nil, fmt.Errorf("--gpg-pubkey: %w", err)
+	}
+	return &gpgEnrollment{relPath: targetRel, candidate: candidate, result: res}, nil
+}
+
+// readKeyInput reads armored key bytes from a file, or from stdin when src is "-".
+// The key material is the user's own (an exported public key), not a policy-named
+// repo path, so it is read directly.
+func readKeyInput(cmd *cobra.Command, src string) ([]byte, error) {
+	if src == "-" {
+		return io.ReadAll(cmd.InOrStdin())
+	}
+	return os.ReadFile(src)
 }
 
 // readPubKey reads and parses an SSH public key file. The key path is the user's own
