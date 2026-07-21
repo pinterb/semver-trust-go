@@ -3,6 +3,8 @@
 package preflight
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -11,7 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/ssh"
+
 	"github.com/semver-trust/semver-trust-go/internal/chain"
+	"github.com/semver-trust/semver-trust-go/internal/sshsig"
 	"github.com/semver-trust/semver-trust-go/internal/verify"
 )
 
@@ -287,6 +292,55 @@ func TestFetchRefspec(t *testing.T) {
 	}
 	if r := checkFetchRefspec(envFor(t, repo, Maintainer)); r.Severity != PASS {
 		t.Errorf("fetch-refspec (configured) = %s %q, want PASS", r.Severity, r.Message)
+	}
+}
+
+func TestEnrollmentLineCheck(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := ssh.NewSignerFromKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, err := sshsig.FormatEnrollmentLine("alex@example.com", "git", signer.PublicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A well-formed line resolves in its declared namespace → PASS.
+	env := &Env{At: time.Now(), EnrollmentLine: []byte(line + "\n")}
+	if r := checkEnrollmentLine(env); r.Severity != PASS {
+		t.Errorf("enrollment-line (valid) = %s %q, want PASS", r.Severity, r.Message)
+	}
+	// A malformed line (the problem #2 shape) → FAIL.
+	env.EnrollmentLine = []byte("this is not a valid signer line\n")
+	if r := checkEnrollmentLine(env); r.Severity != FAIL {
+		t.Errorf("enrollment-line (malformed) = %s, want FAIL", r.Severity)
+	}
+	// A parse-valid line that OMITS namespaces= is unrestricted (trusted in every
+	// namespace) → FAIL, not a silent PASS.
+	key := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
+	env.EnrollmentLine = []byte("alex@example.com " + key + "\n")
+	if r := checkEnrollmentLine(env); r.Severity != FAIL {
+		t.Errorf("enrollment-line (no namespace) = %s %q, want FAIL", r.Severity, r.Message)
+	}
+	// An explicitly EMPTY namespace (namespaces="") matches like an omitted list but
+	// authorizes no production operation → FAIL.
+	env.EnrollmentLine = []byte(`alex@example.com namespaces="" ` + key + "\n")
+	if r := checkEnrollmentLine(env); r.Severity != FAIL {
+		t.Errorf(`enrollment-line (namespaces="") = %s %q, want FAIL`, r.Severity, r.Message)
+	}
+	// A trailing-comma empty member (namespaces="git,") is rejected too.
+	env.EnrollmentLine = []byte(`alex@example.com namespaces="git," ` + key + "\n")
+	if r := checkEnrollmentLine(env); r.Severity != FAIL {
+		t.Errorf(`enrollment-line (namespaces="git,") = %s %q, want FAIL`, r.Severity, r.Message)
+	}
+	// No candidate → SKIP.
+	env.EnrollmentLine = nil
+	if r := checkEnrollmentLine(env); r.Severity != SKIP {
+		t.Errorf("enrollment-line (none) = %s, want SKIP", r.Severity)
 	}
 }
 

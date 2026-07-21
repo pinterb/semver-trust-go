@@ -33,6 +33,7 @@ func newDoctorCmd() *cobra.Command {
 		staged         bool
 		commitRev      string
 		messageF       string
+		enrollLineF    string
 		atStr          string
 		strict         bool
 		jsonOut        bool
@@ -122,19 +123,33 @@ run and restricts the run to a side-effect-free subset.`,
 				}
 			}
 
+			// Resolve --enrollment-line (a candidate registry-line file, or "-" for
+			// stdin) the same way; the simulate/enrollment-line check stays I/O-free.
+			var enrollBytes []byte
+			if enrollLineF == "-" {
+				if enrollBytes, err = io.ReadAll(cmd.InOrStdin()); err != nil {
+					return err
+				}
+			} else if enrollLineF != "" {
+				if enrollBytes, err = os.ReadFile(enrollLineF); err != nil {
+					return fmt.Errorf("--enrollment-line %q: %w", enrollLineF, err)
+				}
+			}
+
 			env := &preflight.Env{
-				Repo:       repoPath,
-				Persona:    persona,
-				At:         at,
-				Policy:     pol,
-				PolicyRaw:  polRaw,
-				PolicyPath: policyPath,
-				PolicyErr:  polErr,
-				Git:        git,
-				Descriptor: descriptor,
-				Staged:     staged,
-				Commit:     commitRev,
-				Message:    msgBytes,
+				Repo:           repoPath,
+				Persona:        persona,
+				At:             at,
+				Policy:         pol,
+				PolicyRaw:      polRaw,
+				PolicyPath:     policyPath,
+				PolicyErr:      polErr,
+				Git:            git,
+				Descriptor:     descriptor,
+				Staged:         staged,
+				Commit:         commitRev,
+				Message:        msgBytes,
+				EnrollmentLine: enrollBytes,
 			}
 
 			report := preflight.Run(env, preflight.Catalog())
@@ -164,6 +179,7 @@ run and restricts the run to a side-effect-free subset.`,
 	f.BoolVar(&staged, "staged", false, "diagnose the staged changes (simulate checks)")
 	f.StringVar(&commitRev, "commit", "", "diagnose a specific commit revision")
 	f.StringVar(&messageF, "message", "", "diagnose a commit-message file (- for stdin)")
+	f.StringVar(&enrollLineF, "enrollment-line", "", "dry-run a candidate allowed-signers line (- for stdin)")
 	f.StringVar(&atStr, "at", "", "diagnosis instant (RFC3339); empty = now at the CLI boundary")
 	f.BoolVar(&strict, "strict", false, "promote WARN to FAIL")
 	f.BoolVar(&jsonOut, "json", false, "emit a structured JSON report instead of the human table")

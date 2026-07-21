@@ -43,6 +43,11 @@ var (
 	// ErrBadSignature — the signature does not verify over the payload
 	// (tampering, corruption, or a signature for other content).
 	ErrBadSignature = errors.New("pgp: signature does not verify")
+	// ErrPrivateKeyMaterial — the input carries an armored private-key block. A
+	// keyring is public trust material; private-key material must never be
+	// enrolled, so enroll refuses it loudly (errors.Is). It is a distinct signal
+	// from a generic parse failure so the caller can name the mistake precisely.
+	ErrPrivateKeyMaterial = errors.New("pgp: input contains private key material")
 )
 
 // Keyring is a parsed OpenPGP public keyring: the injected trust material
@@ -67,6 +72,9 @@ func ParseKeyring(data []byte) (*Keyring, error) {
 		block, err := armor.Decode(bytes.NewReader(blockBytes))
 		if err != nil {
 			return nil, fmt.Errorf("pgp: parsing armored keyring: %w", err)
+		}
+		if block.Type == openpgp.PrivateKeyType {
+			return nil, fmt.Errorf("%w: refusing an armored private-key block (export the PUBLIC key: gpg --armor --export <keyid>)", ErrPrivateKeyMaterial)
 		}
 		if block.Type != openpgp.PublicKeyType {
 			return nil, fmt.Errorf("pgp: keyring block is %q, want %q", block.Type, openpgp.PublicKeyType)
@@ -177,6 +185,24 @@ func principal(e *openpgp.Entity) string {
 		return ident.UserId.Email
 	}
 	return ident.Name
+}
+
+// Fingerprints returns the primary-key fingerprint of every key in the keyring
+// (upper-case hex — the form gpg prints and Verify returns), de-duplicated in
+// keyring order. It is the fingerprint-granular identity enroll diffs against to
+// require at least one NEW key and to refuse a duplicate; Principals() alone is
+// too coarse, since two distinct keys can share an email.
+func (k *Keyring) Fingerprints() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, e := range k.entities {
+		fp := fmt.Sprintf("%X", e.PrimaryKey.Fingerprint)
+		if !seen[fp] {
+			seen[fp] = true
+			out = append(out, fp)
+		}
+	}
+	return out
 }
 
 // Principals returns the primary-identity principal of every key in the keyring,

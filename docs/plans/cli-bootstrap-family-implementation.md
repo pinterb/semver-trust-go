@@ -39,7 +39,7 @@ Status of the milestones, updated as each lands.
 | M0 — governing ADRs | Done | [spec#49](https://github.com/semver-trust/spec/pull/49) |
 | M1 — P0 seam extraction | Done | #125 |
 | M2 — `doctor` | Done | #128, #130, #131 |
-| M3 — `enroll` | In progress | PR-A (SSH + writer) |
+| M3 — `enroll` | Done | #132, PR-B |
 | M4 — `setup` | Not started | — |
 
 M1 tasks: [x] 1.1 export `vcs.GitSSHNamespace` · [x] 1.2 `verify.LoadTrustMaterial` ·
@@ -57,9 +57,10 @@ seam.
 
 M3 tasks: [x] PR-A SSH enroll — `internal/enroll` (ADR-039 atomic `WriteRegistry`; `BuildSSH` with
 duplicate/cross-registry (ADR-040) refusal + `Resolve` self-check), `enroll` command
-(`--commit-key`/`--attest-key`/`--write`/`--dry-run`, print-by-default) · [ ] PR-B GPG enroll
-(`internal/pgp` `Fingerprints()` + `ErrPrivateKeyMaterial`; `BuildGPG`; `--gpg-pubkey`) +
-`simulate/enrollment-line` doctor check.
+(`--commit-key`/`--attest-key`/`--write`/`--dry-run`, print-by-default) · [x] PR-B GPG enroll
+(`internal/pgp` `Fingerprints()` + `ErrPrivateKeyMaterial`; `BuildGPG` — private-key refusal,
+≥1-new, Principals diff; `--gpg-pubkey FILE|-`) + `simulate/enrollment-line` doctor check
+(`doctor --enrollment-line -`).
 
 ## Corrections to the proposal (verified against `main`)
 

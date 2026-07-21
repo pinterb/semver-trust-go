@@ -25,6 +25,7 @@ semver-trust doctor [flags]
       --at string                     diagnosis instant (RFC3339); empty = now at the CLI boundary
       --bootstrap-descriptor string   out-of-band bootstrap descriptor (enables chain/chain-head)
       --commit string                 diagnose a specific commit revision
+      --enrollment-line string        dry-run a candidate allowed-signers line (- for stdin)
   -h, --help                          help for doctor
       --json                          emit a structured JSON report instead of the human table
       --message string                diagnose a commit-message file (- for stdin)
