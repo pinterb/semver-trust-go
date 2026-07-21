@@ -36,7 +36,7 @@ Status of the milestones, updated as each lands.
 
 | Milestone | Status | PR |
 |---|---|---|
-| M0 — governing ADRs | Not started | — |
+| M0 — governing ADRs | In review | [spec#49](https://github.com/semver-trust/spec/pull/49) |
 | M1 — P0 seam extraction | Done | #125 |
 | M2 — `doctor` | Not started (gated on M0) | — |
 | M3 — `enroll` | Not started (gated on M0) | — |
