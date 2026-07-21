@@ -26,11 +26,16 @@ vectors (digest-pinned — see [the spec repository](https://github.com/semver-t
 which protocol capabilities are enforced versus still being adopted is tracked
 in [docs/conformance-coverage.md](docs/conformance-coverage.md).
 
-The repository releases *itself* under the scheme it implements: `v0.1.0` was
-cut on the clean channel at effective trust **T2**, and its decision can be
-re-derived from a fresh public clone using only in-tree trust material and the
-attestation's recorded instant. The [reproduction quickstart](#quickstart)
-below is that flagship claim, runnable.
+The repository releases *itself* under the scheme it implements. Its published
+line runs `v0.1.0`–`v0.2.1` on the default `release/v0.1` chain, then **continues
+onto the opt-in v0.10 authenticated chain at `v0.3.0`** (a `release/v0.2` genesis
+that continues the line, §7.5/ADR-029) — every release cut on the clean channel at
+effective trust **T2**, each decision re-derivable from a fresh public clone and the
+attestation's recorded instant. The v0.1 decisions reproduce from in-tree trust
+material; the `v0.3.0` decision reproduces against an out-of-band bootstrap
+descriptor (see the [v0.10 transition
+record](docs/history/2026-07-20-v0.10-transition.md)). The [reproduction
+quickstart](#quickstart) below is that flagship claim, runnable.
 
 ## Install
 
@@ -96,9 +101,21 @@ That command reproduces the published v0.1 chain from **in-tree** trust material
 — the v0.3 path. The opt-in **v0.10 path** closes the last gap: a v0.10 release is
 reproduced against an **out-of-band bootstrap descriptor supplied from outside the
 clone**, which *authenticates* the in-tree policy and registries by digest rather
-than trusting them because they happen to sit in the tree. This repository's own
-published releases are v0.1; the v0.10 chain is exercised by its
-[conformance coverage](docs/conformance-coverage.md) and end-to-end tests.
+than trusting them because they happen to sit in the tree. This repository now
+dogfoods that path too — its `v0.3.0` release is an authenticated `release/v0.2`
+chain head continuing `v0.2.1`:
+
+```sh
+# <descriptor> is the out-of-band bootstrap descriptor, supplied from outside /tmp/fresh
+go run ./cmd/semver-trust verify --repo . --to v0.3.0 \
+  --bootstrap-descriptor <descriptor> \
+  --verify-time 2026-07-21T00:00:00Z --chain-head
+# accepted chain head: v0.3.0 -> 7d23a679… (effective T2, §7.5/ADR-029)
+```
+
+See the [v0.10 transition record](docs/history/2026-07-20-v0.10-transition.md) for the
+full ceremony; the chain is also exercised by its [conformance
+coverage](docs/conformance-coverage.md) and end-to-end tests.
 
 **3. Explain the policy in effect.**
 
@@ -152,8 +169,9 @@ guides, reference pages, and this repository's own docs. The most-taken paths:
 
 This repository practices the scheme it implements. Every commit in its history
 is signed and carries `Provenance:` trailers, from the first commit onward, and
-its releases (`v0.1.0`, `v0.2.0`, …) ship with trust-tagged, reproducible
-release attestations — the practice is demonstrated, not merely intended.
+its releases (`v0.1.0`–`v0.2.1` on the default chain, then `v0.3.0` on the opt-in
+authenticated v0.10 chain) ship with trust-tagged, reproducible release
+attestations — the practice is demonstrated, not merely intended.
 
 ## License and trademark
 

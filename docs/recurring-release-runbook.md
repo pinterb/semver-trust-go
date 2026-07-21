@@ -219,6 +219,14 @@ minting `v0.1.0`. This is the path a live repository takes when transitioning fr
 default `release/v0.1` chain; the CI publish gate must learn the v0.10 verify path first
 (see `.github/workflows/release.yml`).
 
+**This repository did exactly this.** On 2026-07-20 it continued its own published line
+`v0.2.1` → `v0.3.0` — a signed `release/v0.2` genesis, CI-verified via `verify
+--chain-head` and reproduced by an outsider at effective **T2**. See the [v0.10 transition
+record](history/2026-07-20-v0.10-transition.md) for the full ceremony, including the
+descriptor round-trip gotcha (a GitHub Actions variable strips a trailing newline, so bind
+the genesis to the canonical no-trailing-newline descriptor and verify the round-trip
+before pushing the tag).
+
 ## Out of scope here
 
 Two-stage policy rotation (rotating a signing key across a release boundary) and the

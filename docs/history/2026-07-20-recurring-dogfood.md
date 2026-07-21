@@ -16,6 +16,11 @@ process this run established.
 > a `release/v0.1` attestation. The point was to exercise and document the recurring
 > ceremony before adopting it here (see the runbook's *Continuing an
 > already-published line*).
+>
+> *Update, later that day:* the canonical repo has since adopted the v0.10 chain for
+> real — `v0.2.1` → `v0.3.0`, a maintainer-signed `release/v0.2` genesis — see the
+> [v0.10 transition record](2026-07-20-v0.10-transition.md). This demo remained a
+> throwaway; the real transition was a separate ceremony.
 
 ## What it exercised
 
