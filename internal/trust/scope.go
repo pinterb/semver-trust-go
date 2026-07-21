@@ -169,6 +169,18 @@ func MetaPathViolations(metaPaths []string, required Level, commits []Commit) ([
 	return violations, nil
 }
 
+// MetaPathCovers reports whether any of the meta-path globs covers path, using
+// the same glob compilation MetaPathViolations uses. It is the seam consumed by
+// internal/preflight (doctor policy/meta-coverage), which checks that the trust
+// material and CI paths are inside the meta-path set.
+func MetaPathCovers(metaPaths []string, path string) (bool, error) {
+	globs, err := compileGlobs(metaPaths)
+	if err != nil {
+		return false, err
+	}
+	return matchesAny(path, metaPaths, globs), nil
+}
+
 func matchesAny(path string, patterns []string, globs map[string]*regexp.Regexp) bool {
 	for _, p := range patterns {
 		if globs[p].MatchString(path) {

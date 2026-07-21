@@ -106,7 +106,7 @@ run and restricts the run to a side-effect-free subset.`,
 				Message:    messageF,
 			}
 
-			report := preflight.Run(env, preflight.FoundationChecks())
+			report := preflight.Run(env, preflight.Catalog())
 
 			if jsonOut {
 				if err := report.WriteJSON(cmd.OutOrStdout()); err != nil {

@@ -12,14 +12,15 @@ import (
 	"github.com/semver-trust/semver-trust-go/internal/verify"
 )
 
-// FoundationChecks is the PR-A check slice: the config family plus policy/parse
-// and registry/parse. The remaining families (keys, the rest of registry, policy,
-// simulate, chain, history, trust, remote) land in the following PRs.
-func FoundationChecks() []Check {
+// Catalog is the full doctor check catalog: the config family plus policy/parse
+// and registry/parse (the foundation), then the keys/registry/policy/simulate
+// families (catalogFamilies). The chain/history/trust/remote tier lands in a
+// following PR.
+func Catalog() []Check {
 	all := []Persona{Maintainer, Contributor, Agent}
 	mc := []Persona{Maintainer, Contributor}
 	c := []Persona{Contributor}
-	return []Check{
+	checks := []Check{
 		{ID: "config/identity", Personas: mc, Run: checkConfigIdentity},
 		{ID: "config/signing-enabled", Personas: all, Run: checkSigningEnabled},
 		{ID: "config/commit-template", Personas: c, Run: checkCommitTemplate},
@@ -28,6 +29,7 @@ func FoundationChecks() []Check {
 		{ID: "policy/parse", Personas: all, Run: checkPolicyParse},
 		{ID: "registry/parse", Personas: mc, Run: checkRegistryParse},
 	}
+	return append(checks, catalogFamilies()...)
 }
 
 // includeCaveat discloses that a config-derived answer may live in an included

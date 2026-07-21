@@ -39,15 +39,15 @@ Status of the milestones, updated as each lands.
 | M0 — governing ADRs | Done | [spec#49](https://github.com/semver-trust/spec/pull/49) |
 | M1 — P0 seam extraction | Done | #125 |
 | M2 — `doctor` | In progress | PR-A (foundation) |
-| M3 — `enroll` | Not started (gated on M0) | — |
-| M4 — `setup` | Not started (gated on M0) | — |
+| M3 — `enroll` | Not started | — |
+| M4 — `setup` | Not started | — |
 
 M1 tasks: [x] 1.1 export `vcs.GitSSHNamespace` · [x] 1.2 `verify.LoadTrustMaterial` ·
 [x] 1.3 `verify.ClassifyCommit` · [x] 1.4 this progress section.
 
 M2 tasks: [x] PR-A foundation (`verify.ReadTreeFile`, `sshsig.FormatEnrollmentLine`,
 `internal/pathfence`, `internal/preflight` core, `GitConfig`, `doctor` command, config/ +
-policy/registry parse checks) · [ ] PR-B trust-material catalog (keys/registry/policy/simulate)
+policy/registry parse checks) · [x] PR-B trust-material catalog (keys/registry/policy/simulate)
 · [ ] PR-C soft tier (chain/history/trust/remote).
 
 ## Corrections to the proposal (verified against `main`)
