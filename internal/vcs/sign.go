@@ -77,7 +77,7 @@ func CreateSignedTag(path, name, target, taggerName, taggerEmail, message string
 	if err != nil {
 		return err
 	}
-	armored, err := sshsig.Sign(signer, gitSSHNamespace, payload)
+	armored, err := sshsig.Sign(signer, GitSSHNamespace, payload)
 	if err != nil {
 		return err
 	}

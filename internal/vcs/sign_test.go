@@ -99,8 +99,8 @@ func TestCreateSignedTagRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("embedded signature does not parse as SSHSIG: %v", err)
 	}
-	if sig.Namespace != gitSSHNamespace {
-		t.Errorf("signature namespace = %q, want %q (git signs tags in the git namespace)", sig.Namespace, gitSSHNamespace)
+	if sig.Namespace != GitSSHNamespace {
+		t.Errorf("signature namespace = %q, want %q (git signs tags in the git namespace)", sig.Namespace, GitSSHNamespace)
 	}
 	if err := sig.Verify(payload); err != nil {
 		t.Errorf("signature does not verify over the tag payload: %v", err)
@@ -113,7 +113,7 @@ func TestCreateSignedTagRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal, err := sshsig.Resolve(sig.PublicKey, signers, gitSSHNamespace, signEpoch)
+	principal, err := sshsig.Resolve(sig.PublicKey, signers, GitSSHNamespace, signEpoch)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

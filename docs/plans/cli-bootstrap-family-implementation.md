@@ -30,6 +30,21 @@ current `main`.
   per the design-record mirror rule they do not cascade a `spec_version` bump provided none
   edits `spec/semver-trust.md`.
 
+## Progress
+
+Status of the milestones, updated as each lands.
+
+| Milestone | Status | PR |
+|---|---|---|
+| M0 — governing ADRs | Not started | — |
+| M1 — P0 seam extraction | In review | `refactor-p0-verify-seams` |
+| M2 — `doctor` | Not started (gated on M0) | — |
+| M3 — `enroll` | Not started (gated on M0) | — |
+| M4 — `setup` | Not started (gated on M0) | — |
+
+M1 tasks: [x] 1.1 export `vcs.GitSSHNamespace` · [x] 1.2 `verify.LoadTrustMaterial` ·
+[x] 1.3 `verify.ClassifyCommit` · [x] 1.4 this progress section.
+
 ## Corrections to the proposal (verified against `main`)
 
 The proposal was pinned at an older commit (`71aec5a3`, pre-#76). These points are
@@ -150,11 +165,12 @@ Gating ADR: none. Existing tests are the safety net; no vector or behavior chang
   key-family), assert the `CommitReport` row and the `trust.Commit` classification. GREEN:
   carve `verify.go:338-388` into the following exported callable, called by `verifyWith`'s
   loop. It must be exported because `internal/preflight`'s `simulate/commit` check consumes
-  it:
+  it. It takes `repo` (needed for `VerifyCommitSignature`) and builds the attestation store
+  internally; on failure it returns the same `*AbortError` (step 3) the loop produced:
 
   ```go
-  func ClassifyCommit(c vcs.RangeCommit, trusted vcs.TrustedSigners, av *attest.Verifier,
-      store attest.GitRefStore, pol *policy.Policy, at time.Time) (
+  func ClassifyCommit(repo string, c vcs.RangeCommit, trusted vcs.TrustedSigners,
+      av *attest.Verifier, pol *policy.Policy, at time.Time) (
       CommitReport, trust.Commit, error)
   ```
 
