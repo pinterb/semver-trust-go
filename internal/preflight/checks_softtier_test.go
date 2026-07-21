@@ -3,11 +3,16 @@
 package preflight
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/semver-trust/semver-trust-go/internal/chain"
+	"github.com/semver-trust/semver-trust-go/internal/verify"
 )
 
 // stage writes rel under the repo and adds it to the index, so the --staged
@@ -173,14 +178,77 @@ func TestPreAdoption(t *testing.T) {
 	}
 }
 
+// loadDescriptor writes an inception bootstrap descriptor out-of-band (never
+// inside repo, per ADR-028) and loads it, so Env.Descriptor carries the raw bytes
+// Digest() needs. policyDigest and trustMaterial are the binding fields
+// AuthenticateBootstrapTree checks against HEAD's tree.
+func loadDescriptor(t *testing.T, repo, policyDigest string, trustMaterial map[string]string) *chain.BootstrapDescriptor {
+	t.Helper()
+	tm, err := json.Marshal(trustMaterial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := `{
+		"repository": "repo:test/doctor",
+		"component": "app",
+		"interval_mode": "inception",
+		"tag_prefix": "",
+		"policy_path": ".semver-trust/policy.toml",
+		"policy_digest": "` + policyDigest + `",
+		"verification_profile": "vp",
+		"clock_profile": "cp",
+		"version_predecessor": null,
+		"trust_material": ` + string(tm) + `,
+		"trust_roles": {"human_signers": "m/humans"},
+		"mandatory_meta_paths": [".github/workflows/**"]
+	}`
+	oob := filepath.Join(t.TempDir(), "bootstrap.json") // out-of-band, not under repo
+	if err := os.WriteFile(oob, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, err := chain.LoadBootstrapDescriptor(oob, repo)
+	if err != nil {
+		t.Fatalf("load descriptor: %v", err)
+	}
+	return d
+}
+
 func TestChainHead(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not on PATH")
 	}
-	repo, _ := doctorRepo(t, `".semver-trust/**"`, "distinct")
+	repo, _ := doctorRepo(t, `".semver-trust/**", ".github/workflows/**"`, "distinct")
+
 	// No --bootstrap-descriptor → the accepted chain head is not projectable → SKIP.
 	if r := checkChainHead(envFor(t, repo, Maintainer)); r.Severity != SKIP {
 		t.Errorf("chain-head (no descriptor) = %s %q, want SKIP", r.Severity, r.Message)
+	}
+
+	// A descriptor with the right subject but a stale/tampered policy_digest must
+	// NOT authenticate against HEAD's tree — it fails closed (FAIL), never PASS.
+	env := envFor(t, repo, Maintainer)
+	bogus := "sha256:" + strings.Repeat("00", 32)
+	env.Descriptor = loadDescriptor(t, repo, bogus, map[string]string{"m/humans": bogus})
+	r := checkChainHead(env)
+	if r.Severity != FAIL {
+		t.Errorf("chain-head (unbinding descriptor) = %s %q, want FAIL (fail closed)", r.Severity, r.Message)
+	}
+	if !strings.Contains(r.Preempts, "ADR-028") {
+		t.Errorf("chain-head binding FAIL should name the §5.4/ADR-028 binding; Preempts=%q", r.Preempts)
+	}
+
+	// A descriptor whose policy_digest + trust_material actually bind HEAD's tree
+	// authenticates; with no published release/v0.2 chain the bound head is genesis
+	// → SKIP. This exercises the full authenticate → verifier → AcceptedChainHead-
+	// BoundTo(Digest()) sequence on a genuine descriptor.
+	env2 := envFor(t, repo, Maintainer)
+	meta, err := verify.MetaPolicyFromTree(env2.Policy, env2.PolicyPath, repo, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env2.Descriptor = loadDescriptor(t, repo, meta.Digest, meta.TrustMaterial)
+	if r := checkChainHead(env2); r.Severity != SKIP {
+		t.Errorf("chain-head (binding descriptor, no chain) = %s %q, want SKIP (genesis)", r.Severity, r.Message)
 	}
 }
 
@@ -196,7 +264,23 @@ func TestFetchRefspec(t *testing.T) {
 		t.Errorf("fetch-refspec (unconfigured) = %s %q, want WARN", r.Severity, r.Message)
 	}
 
-	// Configure it and reload git config → PASS (exercises the --get-all reader).
+	// A refspec that merely mentions the namespace but maps into refs/heads/… does
+	// NOT deliver evidence where GitRefStore reads it — a substring match would
+	// wrongly PASS; the exact-mapping check must still WARN.
+	wrongDst := envFor(t, repo, Maintainer)
+	wrongDst.Git.FetchRefspecs = []string{"+refs/attestations/*:refs/heads/attestations/*"}
+	if r := checkFetchRefspec(wrongDst); r.Severity != WARN {
+		t.Errorf("fetch-refspec (wrong destination namespace) = %s %q, want WARN", r.Severity, r.Message)
+	}
+	// The inverse mapping fetches no attestation refs at all → WARN.
+	wrongSrc := envFor(t, repo, Maintainer)
+	wrongSrc.Git.FetchRefspecs = []string{"+refs/heads/*:refs/attestations/*"}
+	if r := checkFetchRefspec(wrongSrc); r.Severity != WARN {
+		t.Errorf("fetch-refspec (wrong source) = %s %q, want WARN", r.Severity, r.Message)
+	}
+
+	// Configure the exact mapping and reload git config → PASS (also exercises the
+	// --get-all reader and the optional leading +).
 	if out, err := exec.Command("git", "-C", repo, "config", "--add",
 		"remote.origin.fetch", "+refs/attestations/*:refs/attestations/*").CombinedOutput(); err != nil {
 		t.Fatalf("git config: %v\n%s", err, out)

@@ -275,18 +275,45 @@ func checkChainHead(env *Env) Result {
 	if env.Policy == nil {
 		return skip("policy does not parse — cannot build the attestation verifier")
 	}
-	av, err := verify.AttestationVerifier(verify.Options{RepoPath: env.Repo, To: "HEAD", PolicyPath: env.PolicyPath})
+	// Mirror verify --chain-head (cmd/semver-trust/verify.go): this interval-less
+	// reader bypasses the pipeline's checkPolicyTransition, so it must do the
+	// §5.4/ADR-028 binding itself — authenticate the descriptor against HEAD's tree,
+	// then bind the accepted chain to THIS descriptor's authority identity. Carrying
+	// Bootstrap in the options also makes AttestationVerifier reject filesystem
+	// trust-material overrides (a key-substitution bypass).
+	opts := verify.Options{
+		RepoPath:   env.Repo,
+		To:         "HEAD",
+		PolicyPath: env.PolicyPath,
+		Component:  env.Descriptor.Component,
+		VerifyTime: env.At,
+		Bootstrap:  env.Descriptor,
+	}
+	// Authenticate the pinned policy/trust-material digests against HEAD BEFORE
+	// trusting the store: a descriptor with the right repository/component but stale
+	// or tampered digests must not produce a PASS.
+	if err := verify.AuthenticateBootstrapTree(opts); err != nil {
+		return fail("the bootstrap descriptor does not bind HEAD's tree: "+err.Error(),
+			"§5.4/ADR-028 (descriptor binding)", "re-pin the descriptor to the committed policy/trust-material digests")
+	}
+	av, err := verify.AttestationVerifier(opts)
 	if err != nil {
 		return fail("cannot build the attestation verifier: "+err.Error(),
 			"§9 (attestation)", "check the policy's attestation_signers")
 	}
-	head, err := chain.AcceptedChainHead(env.Repo, env.Descriptor.Repository, env.Descriptor.Component, av, env.At)
+	if av == nil {
+		return skip("policy declares no attestation signers — the accepted chain cannot be verified (§9)")
+	}
+	// Bind the reported head to descriptor.Digest() — the authority identity a
+	// genesis release records — not merely a shared repository/component, so a
+	// foreign descriptor sharing this subject cannot be reported as this chain's head.
+	head, err := chain.AcceptedChainHeadBoundTo(env.Repo, env.Descriptor.Repository, env.Descriptor.Component, env.Descriptor.Digest(), av, env.At)
 	if err != nil {
-		return fail("the accepted chain does not verify: "+err.Error(),
+		return fail("the accepted chain does not verify or does not bind this descriptor: "+err.Error(),
 			"§7.5/ADR-027 (accepted chain)", "inspect the release/v0.2 chain against the descriptor")
 	}
 	if head == nil {
-		return skip("no accepted release/v0.2 chain head — genesis (no predecessor to project)")
+		return skip("no accepted release/v0.2 chain head bound to this descriptor — genesis (no predecessor to project)")
 	}
 	return pass(fmt.Sprintf("accepted chain head: %s (effective %s)", head.Tag(), head.Effective()))
 }
@@ -294,12 +321,19 @@ func checkChainHead(env *Env) Result {
 // ---- remote/platform/ ------------------------------------------------------
 
 func checkFetchRefspec(env *Env) Result {
+	// Require the exact mapping src:dst = refs/attestations/*:refs/attestations/*,
+	// accepting the optional force prefix. A substring match would pass refspecs
+	// that fetch into (or from) the wrong namespace — e.g. +refs/attestations/*:
+	// refs/heads/attestations/* stores evidence where GitRefStore never reads it,
+	// and +refs/heads/*:refs/attestations/* fetches no attestation refs at all —
+	// so the diagnostic must not say verification will see evidence when it will not.
+	const want = "refs/attestations/*:refs/attestations/*"
 	for _, rs := range env.Git.FetchRefspecs {
-		if strings.Contains(rs, "refs/attestations/") {
+		if strings.TrimPrefix(rs, "+") == want {
 			return pass("attestation fetch refspec is configured")
 		}
 	}
-	return warn("the attestation fetch refspec is not configured — `git fetch` will not move attestation evidence, and verification cannot see it (ADR-043)",
+	return warn("the attestation fetch refspec is not configured — `git fetch` will not move attestation evidence into the refs/attestations/* namespace the verifier reads (ADR-043)",
 		`git config --add remote.origin.fetch '+refs/attestations/*:refs/attestations/*'`)
 }
 
