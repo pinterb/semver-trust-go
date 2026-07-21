@@ -18,8 +18,13 @@ type GPGResult struct {
 	// NewFingerprints are the primary-key fingerprints this enrollment introduces
 	// (mandatory identity disclosure).
 	NewFingerprints []string
-	// NewPrincipals are the principals introduced — the Principals() diff the human
-	// sees before committing.
+	// CandidatePrincipals are the principals of the candidate key(s) — ALWAYS the
+	// full set, so the disclosure names whose authority is being added even when the
+	// email already exists in the keyring (a key rotation, where NewPrincipals is
+	// empty). This is the identity the human must see before committing.
+	CandidatePrincipals []string
+	// NewPrincipals are the principals introduced relative to the existing keyring —
+	// supplemental delta, empty on a same-email rotation.
 	NewPrincipals []string
 	// AllPrincipals are the principals after the append.
 	AllPrincipals []string
@@ -79,10 +84,11 @@ func BuildGPG(candidate, existing []byte) (*GPGResult, error) {
 	}
 
 	return &GPGResult{
-		NewContent:      newContent,
-		NewFingerprints: newFPs,
-		NewPrincipals:   newPrincipals,
-		AllPrincipals:   wholeKR.Principals(),
+		NewContent:          newContent,
+		NewFingerprints:     newFPs,
+		CandidatePrincipals: candKR.Principals(),
+		NewPrincipals:       newPrincipals,
+		AllPrincipals:       wholeKR.Principals(),
 	}, nil
 }
 

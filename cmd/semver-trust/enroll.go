@@ -171,8 +171,14 @@ makes zero filesystem changes and prints exactly what --write would do.`,
 			}
 			if gpgPending != nil {
 				se.printf("\n--gpg-pubkey → %s\n", gpgPending.relPath)
-				se.printf("  adds principal(s):   %s\n", strings.Join(gpgPending.result.NewPrincipals, ", "))
-				se.printf("  adds fingerprint(s): %s\n", strings.Join(gpgPending.result.NewFingerprints, ", "))
+				// Always name the candidate key's identity (whose authority is being
+				// added), even on a same-email key rotation where the new-principal
+				// delta is empty.
+				se.printf("  key(s) for:          %s\n", strings.Join(gpgPending.result.CandidatePrincipals, ", "))
+				se.printf("  new fingerprint(s):  %s\n", strings.Join(gpgPending.result.NewFingerprints, ", "))
+				if len(gpgPending.result.NewPrincipals) > 0 {
+					se.printf("  new principal(s):    %s\n", strings.Join(gpgPending.result.NewPrincipals, ", "))
+				}
 			}
 			se.println("\nThe tool never stages, commits, or signs (ADR-038). To enroll, either:")
 			se.println("  • paste the printed line into your enrollment PR;")

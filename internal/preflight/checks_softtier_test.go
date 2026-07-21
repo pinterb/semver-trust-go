@@ -319,6 +319,13 @@ func TestEnrollmentLineCheck(t *testing.T) {
 	if r := checkEnrollmentLine(env); r.Severity != FAIL {
 		t.Errorf("enrollment-line (malformed) = %s, want FAIL", r.Severity)
 	}
+	// A parse-valid line that OMITS namespaces= is unrestricted (trusted in every
+	// namespace) → FAIL, not a silent PASS.
+	noNS := "alex@example.com " + strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
+	env.EnrollmentLine = []byte(noNS + "\n")
+	if r := checkEnrollmentLine(env); r.Severity != FAIL {
+		t.Errorf("enrollment-line (no namespace) = %s %q, want FAIL", r.Severity, r.Message)
+	}
 	// No candidate → SKIP.
 	env.EnrollmentLine = nil
 	if r := checkEnrollmentLine(env); r.Severity != SKIP {

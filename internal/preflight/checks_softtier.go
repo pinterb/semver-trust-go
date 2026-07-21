@@ -226,17 +226,21 @@ func checkEnrollmentLine(env *Env) Result {
 	if len(signers) == 0 {
 		return skip("no enrollment line found (only blanks/comments)")
 	}
-	// Each candidate key must resolve in its own declared namespace at the diagnosis
-	// instant — the same resolver verification uses. A line that parses but does not
-	// resolve (a mistyped/omitted namespace, an inverted validity window) surfaces here.
+	// Each candidate must declare its namespace(s) explicitly and resolve in each,
+	// at the diagnosis instant, via the same resolver verification uses. An OMITTED
+	// namespace is a FAIL, not a default: sshsig treats an empty namespace list as
+	// matching EVERY namespace, so an unscoped line would trust the key for both
+	// commit signing and attestation — a broader authority than enroll ever emits.
 	for _, s := range signers {
-		ns := vcs.GitSSHNamespace
-		if len(s.Namespaces) > 0 {
-			ns = s.Namespaces[0]
+		if len(s.Namespaces) == 0 {
+			return fail("candidate line omits namespaces=, so the key would be trusted in EVERY namespace (commit AND attestation) — enrollment lines must scope the namespace",
+				"§10 step 3 (verify signature)", `add a quoted namespace, e.g. namespaces="git" (exactly what enroll emits)`)
 		}
-		if _, rerr := sshsig.Resolve(s.Key, signers, ns, env.At); rerr != nil {
-			return fail("candidate line parses but does not resolve in namespace "+ns+": "+rerr.Error(),
-				"§10 step 3 (verify signature)", "check the namespace and the enrollment validity window")
+		for _, ns := range s.Namespaces {
+			if _, rerr := sshsig.Resolve(s.Key, signers, ns, env.At); rerr != nil {
+				return fail("candidate line parses but does not resolve in namespace "+ns+": "+rerr.Error(),
+					"§10 step 3 (verify signature)", "check the namespace and the enrollment validity window")
+			}
 		}
 	}
 	return pass(fmt.Sprintf("candidate enrollment line resolves (%d signer(s))", len(signers)))

@@ -266,6 +266,48 @@ func TestEnrollGPG(t *testing.T) {
 	}
 }
 
+// A key rotation — a DISTINCT key for an already-enrolled email — must still
+// disclose the candidate identity, even though the new-principal delta is empty.
+func TestEnrollGPGRotationDisclosesPrincipal(t *testing.T) {
+	repo, _, _ := enrollRepo(t)
+	keyring := filepath.Join(repo, ".semver-trust", "gpg-keyring.asc")
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	a, err := pgptest.NewSigner("Alice", "alice@example.com", at, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	armoredA, err := pgptest.ArmoredKeyring(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyring, armoredA, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A second, distinct key for the same email.
+	b, err := pgptest.NewSigner("Alice", "alice@example.com", at, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	armoredB, err := pgptest.ArmoredKeyring(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath := filepath.Join(t.TempDir(), "b.asc")
+	if err := os.WriteFile(keyPath, armoredB, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, errOut, err := runRoot(t, "enroll", "--repo", repo, "--gpg-pubkey", keyPath)
+	if err != nil {
+		t.Fatalf("enroll rotation: %v", err)
+	}
+	if !strings.Contains(errOut, "alice@example.com") {
+		t.Errorf("a same-email rotation must still disclose the candidate principal:\n%s", errOut)
+	}
+}
+
 // The enroll-adjacent doctor check: doctor --enrollment-line - dry-runs a candidate
 // registry line (the enroll output) through the strict parser + Resolve.
 func TestDoctorEnrollmentLine(t *testing.T) {
