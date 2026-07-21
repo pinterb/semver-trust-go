@@ -17,9 +17,11 @@ import (
 	"github.com/semver-trust/semver-trust-go/internal/sshsig"
 )
 
-// gitSSHNamespace is the signature namespace git uses for commits and tags;
-// a signature bound to any other purpose does not cover a commit.
-const gitSSHNamespace = "git"
+// GitSSHNamespace is the signature namespace git uses for commits and tags;
+// a signature bound to any other purpose does not cover a commit. It is exported
+// so the bootstrap-family tooling (enroll/doctor) can name the commit-signing
+// namespace without duplicating the literal.
+const GitSSHNamespace = "git"
 
 // AllowedSigner re-exports the registry entry type consumed by
 // VerifyCommitSignature; parsing and resolution live in internal/sshsig,
@@ -124,17 +126,17 @@ func VerifyCommitSignature(path, rev string, trusted TrustedSigners, at time.Tim
 	if err != nil {
 		return VerifiedSignature{}, fmt.Errorf("verify %s: %w: %v", commit.Hash, ErrInvalidSignature, err)
 	}
-	if sig.Namespace != gitSSHNamespace {
+	if sig.Namespace != GitSSHNamespace {
 		return VerifiedSignature{}, fmt.Errorf(
 			"verify %s: signature namespace %q is not %q: %w",
-			commit.Hash, sig.Namespace, gitSSHNamespace, ErrInvalidSignature,
+			commit.Hash, sig.Namespace, GitSSHNamespace, ErrInvalidSignature,
 		)
 	}
 
 	// Resolve the embedded key against the injected registry before any
 	// cryptography: an unenrolled key's mathematically valid signature is
 	// still an abort, and enrolled-but-invalid is reported distinctly.
-	principal, err := sshsig.Resolve(sig.PublicKey, trusted.AllowedSigners, gitSSHNamespace, at)
+	principal, err := sshsig.Resolve(sig.PublicKey, trusted.AllowedSigners, GitSSHNamespace, at)
 	if err != nil {
 		return VerifiedSignature{}, fmt.Errorf("verify %s: %w", commit.Hash, err)
 	}

@@ -224,6 +224,84 @@ func equalDigestMaps(a, b map[string]string) bool {
 	return true
 }
 
+// LoadTrustMaterial resolves the policy's trust material into the signer set and
+// the attestation verifier that verification uses (§9). It is the P0 seam consumed
+// by internal/preflight (doctor): the resolvers stay unexported and this is the
+// single exported entry. It returns the raw resolver error; verifyWith wraps it as
+// the §10 step-1 (load policy) abort so behavior is unchanged.
+func LoadTrustMaterial(opts Options, pol *policy.Policy, repo string) (vcs.TrustedSigners, *attest.Verifier, error) {
+	keyring, err := resolvePGPKeyring(opts, pol, repo)
+	if err != nil {
+		return vcs.TrustedSigners{}, nil, err
+	}
+	signers, err := resolveHumanSigners(opts, pol, repo, keyring != nil)
+	if err != nil {
+		return vcs.TrustedSigners{}, nil, err
+	}
+	attVerifier, err := buildAttestationVerifier(opts, pol, repo)
+	if err != nil {
+		return vcs.TrustedSigners{}, nil, err
+	}
+	return vcs.TrustedSigners{AllowedSigners: signers, PGPKeyring: keyring}, attVerifier, nil
+}
+
+// ClassifyCommit verifies one commit end-to-end (§10 step 3) — signature,
+// key-family, covering review attestation — and returns its report row and the
+// trust.Commit the meta-path/scope aggregation consumes. It is the P0 seam consumed
+// by internal/preflight (doctor simulate/commit); on failure it returns the same
+// *AbortError (step 3 signature or attestation) verifyWith's loop produced.
+func ClassifyCommit(repo string, c vcs.RangeCommit, trusted vcs.TrustedSigners, av *attest.Verifier, pol *policy.Policy, at time.Time) (CommitReport, trust.Commit, error) {
+	store := attest.GitRefStore{Path: repo}
+	vs, err := vcs.VerifyCommitSignature(repo, c.Hash, trusted, at)
+	if err != nil {
+		return CommitReport{}, trust.Commit{}, abort(stepSignature, err)
+	}
+	signerClass := identityClass(pol, vs.Principal)
+
+	review, err := resolveReview(store, av, pol, c.Hash, vs.Principal, at)
+	if err != nil {
+		return CommitReport{}, trust.Commit{}, abort(stepAttestation, err)
+	}
+
+	authorship, reviewClass, level, qualifyReason := trust.ClassifyWithQualification(trust.CommitFacts{
+		Signer:           signerClass,
+		Provenance:       c.Trailers.Provenance(),
+		TrailersRequired: pol.TrailersRequired,
+		Review:           review.facts,
+	}, review.qual)
+
+	note := review.note
+	if qualifyReason != "" {
+		// A consumed review/v0.2 that verified but did not qualify names why,
+		// so the honest degradation is visible rather than silent.
+		note = "review/v0.2 did not qualify: " + qualifyReason
+	}
+
+	row := CommitReport{
+		SHA:         c.Hash,
+		Short:       shortSHA(c.Hash),
+		Level:       level.String(),
+		Authorship:  authorship.String(),
+		Review:      reviewClass.String(),
+		Signer:      vs.Principal,
+		Fingerprint: vs.Fingerprint,
+		Provenance:  c.Trailers.Provenance(),
+		Trailers:    trailersMap(c.Trailers),
+		Merge:       c.Merge,
+		Paths:       c.Paths,
+		ReviewNote:  note,
+	}
+	if review.facts != nil {
+		row.ReviewIdentity = review.facts.ReviewerIdentity
+		row.ReviewAttestation = review.ref
+	}
+	if review.qual != nil {
+		row.ReviewIdentity = review.qual.ReviewerActor
+		row.ReviewAttestation = review.ref
+	}
+	return row, trust.Commit{ID: c.Hash, Level: level, Paths: c.Paths}, nil
+}
+
 // verifyWith runs §10 steps 2–7 against an already-loaded policy.
 func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 	at := opts.VerifyTime
@@ -251,16 +329,7 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 		return nil, abort(stepLoadPolicy, err)
 	}
 
-	keyring, err := resolvePGPKeyring(opts, pol, repo)
-	if err != nil {
-		return nil, abort(stepLoadPolicy, err)
-	}
-	signers, err := resolveHumanSigners(opts, pol, repo, keyring != nil)
-	if err != nil {
-		return nil, abort(stepLoadPolicy, err)
-	}
-	trusted := vcs.TrustedSigners{AllowedSigners: signers, PGPKeyring: keyring}
-	attVerifier, err := buildAttestationVerifier(opts, pol, repo)
+	trusted, attVerifier, err := LoadTrustMaterial(opts, pol, repo)
 	if err != nil {
 		return nil, abort(stepLoadPolicy, err)
 	}
@@ -332,58 +401,14 @@ func verifyWith(opts Options, pol *policy.Policy) (*Report, error) {
 	}
 
 	// ---- §10 step 3: verify each commit end-to-end and classify. -----------
-	store := attest.GitRefStore{Path: repo}
 	tcommits := make([]trust.Commit, 0, len(commits))
 	report.Commits = make([]CommitReport, 0, len(commits))
 	for _, c := range commits {
-		vs, err := vcs.VerifyCommitSignature(repo, c.Hash, trusted, at)
+		row, tc, err := ClassifyCommit(repo, c, trusted, attVerifier, pol, at)
 		if err != nil {
-			return nil, abort(stepSignature, err)
+			return nil, err
 		}
-		signerClass := identityClass(pol, vs.Principal)
-
-		review, err := resolveReview(store, attVerifier, pol, c.Hash, vs.Principal, at)
-		if err != nil {
-			return nil, abort(stepAttestation, err)
-		}
-
-		authorship, reviewClass, level, qualifyReason := trust.ClassifyWithQualification(trust.CommitFacts{
-			Signer:           signerClass,
-			Provenance:       c.Trailers.Provenance(),
-			TrailersRequired: pol.TrailersRequired,
-			Review:           review.facts,
-		}, review.qual)
-
-		note := review.note
-		if qualifyReason != "" {
-			// A consumed review/v0.2 that verified but did not qualify names why,
-			// so the honest degradation is visible rather than silent.
-			note = "review/v0.2 did not qualify: " + qualifyReason
-		}
-
-		row := CommitReport{
-			SHA:         c.Hash,
-			Short:       shortSHA(c.Hash),
-			Level:       level.String(),
-			Authorship:  authorship.String(),
-			Review:      reviewClass.String(),
-			Signer:      vs.Principal,
-			Fingerprint: vs.Fingerprint,
-			Provenance:  c.Trailers.Provenance(),
-			Trailers:    trailersMap(c.Trailers),
-			Merge:       c.Merge,
-			Paths:       c.Paths,
-			ReviewNote:  note,
-		}
-		if review.facts != nil {
-			row.ReviewIdentity = review.facts.ReviewerIdentity
-			row.ReviewAttestation = review.ref
-		}
-		if review.qual != nil {
-			row.ReviewIdentity = review.qual.ReviewerActor
-			row.ReviewAttestation = review.ref
-		}
-		tcommits = append(tcommits, trust.Commit{ID: c.Hash, Level: level, Paths: c.Paths})
+		tcommits = append(tcommits, tc)
 		report.Commits = append(report.Commits, row)
 	}
 
