@@ -38,8 +38,8 @@ Status of the milestones, updated as each lands.
 |---|---|---|
 | M0 — governing ADRs | Done | [spec#49](https://github.com/semver-trust/spec/pull/49) |
 | M1 — P0 seam extraction | Done | #125 |
-| M2 — `doctor` | In progress | PR-A (foundation) |
-| M3 — `enroll` | Not started | — |
+| M2 — `doctor` | Done | #128, #130, #131 |
+| M3 — `enroll` | In progress | PR-A (SSH + writer) |
 | M4 — `setup` | Not started | — |
 
 M1 tasks: [x] 1.1 export `vcs.GitSSHNamespace` · [x] 1.2 `verify.LoadTrustMaterial` ·
@@ -48,7 +48,18 @@ M1 tasks: [x] 1.1 export `vcs.GitSSHNamespace` · [x] 1.2 `verify.LoadTrustMater
 M2 tasks: [x] PR-A foundation (`verify.ReadTreeFile`, `sshsig.FormatEnrollmentLine`,
 `internal/pathfence`, `internal/preflight` core, `GitConfig`, `doctor` command, config/ +
 policy/registry parse checks) · [x] PR-B trust-material catalog (keys/registry/policy/simulate)
-· [ ] PR-C soft tier (chain/history/trust/remote).
+· [x] PR-C soft tier: keys/configured-vs-enrolled + keys/sign-roundtrip, simulate/meta-touch +
+simulate/staged-purity, trust/agent-provenance, history/pre-adoption, chain/chain-head
+(`--bootstrap-descriptor`), remote/fetch-refspec + remote/rulesets + remote/release-baseline.
+Deferred (not enroll-adjacent): `registry/attestation-refs-local` (release-tag attestation refs
+via `GitRefStore.List`) — a standalone future `doctor` addition; it depends on no `enroll`/`setup`
+seam.
+
+M3 tasks: [x] PR-A SSH enroll — `internal/enroll` (ADR-039 atomic `WriteRegistry`; `BuildSSH` with
+duplicate/cross-registry (ADR-040) refusal + `Resolve` self-check), `enroll` command
+(`--commit-key`/`--attest-key`/`--write`/`--dry-run`, print-by-default) · [ ] PR-B GPG enroll
+(`internal/pgp` `Fingerprints()` + `ErrPrivateKeyMaterial`; `BuildGPG`; `--gpg-pubkey`) +
+`simulate/enrollment-line` doctor check.
 
 ## Corrections to the proposal (verified against `main`)
 
