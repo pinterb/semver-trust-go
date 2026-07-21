@@ -33,6 +33,10 @@ type GitConfig struct {
 	GitDir         string `json:"git_dir,omitempty"`
 	TopLevel       string `json:"top_level,omitempty"`
 
+	// FetchRefspecs is remote.origin.fetch (all values) — checked for the
+	// attestation refspec (ADR-043).
+	FetchRefspecs []string `json:"fetch_refspecs,omitempty"`
+
 	// HasIncludes reports include/includeIf directives; when set, config-derived
 	// answers carry a disclosed caveat (go-git does not expand includes, and a
 	// managed key may live in an included file).
@@ -81,6 +85,9 @@ func LoadGitConfig(repo string) (*GitConfig, error) {
 	}
 	if _, ok := run("config", "--get-regexp", "include"); ok {
 		g.HasIncludes = true
+	}
+	if out, ok := run("config", "--get-all", "remote.origin.fetch"); ok && out != "" {
+		g.FetchRefspecs = strings.Split(out, "\n")
 	}
 	return g, nil
 }

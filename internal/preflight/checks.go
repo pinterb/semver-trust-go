@@ -14,8 +14,8 @@ import (
 
 // Catalog is the full doctor check catalog: the config family plus policy/parse
 // and registry/parse (the foundation), then the keys/registry/policy/simulate
-// families (catalogFamilies). The chain/history/trust/remote tier lands in a
-// following PR.
+// trust-material families (catalogFamilies), then the softer chain/history/trust/
+// remote-platform tier (catalogSoftTier).
 func Catalog() []Check {
 	all := []Persona{Maintainer, Contributor, Agent}
 	mc := []Persona{Maintainer, Contributor}
@@ -29,7 +29,8 @@ func Catalog() []Check {
 		{ID: "policy/parse", Personas: all, Run: checkPolicyParse},
 		{ID: "registry/parse", Personas: mc, Run: checkRegistryParse},
 	}
-	return append(checks, catalogFamilies()...)
+	checks = append(checks, catalogFamilies()...)
+	return append(checks, catalogSoftTier()...)
 }
 
 // includeCaveat discloses that a config-derived answer may live in an included

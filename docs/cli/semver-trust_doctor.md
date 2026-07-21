@@ -22,16 +22,17 @@ semver-trust doctor [flags]
 ### Options
 
 ```
-      --at string        diagnosis instant (RFC3339); empty = now at the CLI boundary
-      --commit string    diagnose a specific commit revision
-  -h, --help             help for doctor
-      --json             emit a structured JSON report instead of the human table
-      --message string   diagnose a commit-message file (- for stdin)
-      --persona string   maintainer|contributor|agent (default: auto-detected for humans)
-      --policy string    policy file path within the repository (default ".semver-trust/policy.toml")
-      --repo string      repository to diagnose (default ".")
-      --staged           diagnose the staged changes (simulate checks)
-      --strict           promote WARN to FAIL
+      --at string                     diagnosis instant (RFC3339); empty = now at the CLI boundary
+      --bootstrap-descriptor string   out-of-band bootstrap descriptor (enables chain/chain-head)
+      --commit string                 diagnose a specific commit revision
+  -h, --help                          help for doctor
+      --json                          emit a structured JSON report instead of the human table
+      --message string                diagnose a commit-message file (- for stdin)
+      --persona string                maintainer|contributor|agent (default: auto-detected for humans)
+      --policy string                 policy file path within the repository (default ".semver-trust/policy.toml")
+      --repo string                   repository to diagnose (default ".")
+      --staged                        diagnose the staged changes (simulate checks)
+      --strict                        promote WARN to FAIL
 ```
 
 ### SEE ALSO

@@ -108,4 +108,11 @@ func TestDoctorCommand(t *testing.T) {
 	if !strings.Contains(mout.String(), "simulate/classify") || !strings.Contains(mout.String(), "Provenance: human") {
 		t.Errorf("--message - should classify the stdin message:\n%s", mout.String())
 	}
+
+	// A supplied-but-unloadable --bootstrap-descriptor is a hard error (a silent
+	// nil would make chain/chain-head quietly SKIP).
+	if _, _, derr := runRoot(t, "doctor", "--repo", repo,
+		"--bootstrap-descriptor", filepath.Join(repo, "nonexistent.json")); derr == nil {
+		t.Error("an unloadable --bootstrap-descriptor should error")
+	}
 }

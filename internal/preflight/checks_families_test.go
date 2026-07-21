@@ -5,6 +5,7 @@ package preflight
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/pem"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,6 +46,15 @@ func doctorRepo(t *testing.T, metaPaths, attestationEnroll string) (repo string,
 	pub := signer.PublicKey()
 	keyPath = filepath.Join(t.TempDir(), "commit.pub") // outside the repo, like ~/.ssh
 	if err := os.WriteFile(keyPath, ssh.MarshalAuthorizedKey(pub), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Write the private half alongside (unencrypted), so keys/sign-roundtrip has a
+	// complete signing setup — a real clone has both halves under ~/.ssh.
+	block, err := ssh.MarshalPrivateKey(priv, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(strings.TrimSuffix(keyPath, ".pub"), pem.EncodeToMemory(block), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	run("config", "gpg.format", "ssh")

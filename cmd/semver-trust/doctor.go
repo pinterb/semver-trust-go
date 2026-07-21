@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/semver-trust/semver-trust-go/internal/chain"
 	"github.com/semver-trust/semver-trust-go/internal/pathfence"
 	"github.com/semver-trust/semver-trust-go/internal/policy"
 	"github.com/semver-trust/semver-trust-go/internal/preflight"
@@ -25,15 +26,16 @@ import (
 // on-ramp to verify, never a replacement, and is not meant to be wired into CI.
 func newDoctorCmd() *cobra.Command {
 	var (
-		repoPath   string
-		personaStr string
-		policyPath string
-		staged     bool
-		commitRev  string
-		messageF   string
-		atStr      string
-		strict     bool
-		jsonOut    bool
+		repoPath       string
+		personaStr     string
+		policyPath     string
+		descriptorPath string
+		staged         bool
+		commitRev      string
+		messageF       string
+		atStr          string
+		strict         bool
+		jsonOut        bool
 	)
 
 	cmd := &cobra.Command{
@@ -93,6 +95,18 @@ run and restricts the run to a side-effect-free subset.`,
 				return err
 			}
 
+			// The bootstrap descriptor is optional out-of-band trust material
+			// (ADR-027/028); when supplied, chain/chain-head projects the accepted
+			// chain head from it. A supplied-but-unloadable descriptor is a hard
+			// error — a silent nil would make the check quietly SKIP.
+			var descriptor *chain.BootstrapDescriptor
+			if descriptorPath != "" {
+				descriptor, err = chain.LoadBootstrapDescriptor(descriptorPath, repoPath)
+				if err != nil {
+					return fmt.Errorf("--bootstrap-descriptor %q: %w", descriptorPath, err)
+				}
+			}
+
 			// Resolve --message (a commit-message file, or "-" for stdin) to its
 			// content here at the boundary; the simulate/classify check stays
 			// I/O-free. --message is a user-supplied path, not a policy-named repo
@@ -117,6 +131,7 @@ run and restricts the run to a side-effect-free subset.`,
 				PolicyPath: policyPath,
 				PolicyErr:  polErr,
 				Git:        git,
+				Descriptor: descriptor,
 				Staged:     staged,
 				Commit:     commitRev,
 				Message:    msgBytes,
@@ -145,6 +160,7 @@ run and restricts the run to a side-effect-free subset.`,
 	f.StringVar(&repoPath, "repo", ".", "repository to diagnose")
 	f.StringVar(&personaStr, "persona", "", "maintainer|contributor|agent (default: auto-detected for humans)")
 	f.StringVar(&policyPath, "policy", ".semver-trust/policy.toml", "policy file path within the repository")
+	f.StringVar(&descriptorPath, "bootstrap-descriptor", "", "out-of-band bootstrap descriptor (enables chain/chain-head)")
 	f.BoolVar(&staged, "staged", false, "diagnose the staged changes (simulate checks)")
 	f.StringVar(&commitRev, "commit", "", "diagnose a specific commit revision")
 	f.StringVar(&messageF, "message", "", "diagnose a commit-message file (- for stdin)")

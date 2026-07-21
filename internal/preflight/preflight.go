@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/semver-trust/semver-trust-go/internal/chain"
 	"github.com/semver-trust/semver-trust-go/internal/policy"
 )
 
@@ -103,6 +104,13 @@ type Env struct {
 	// Git is this clone's configuration and environment facts, read through the
 	// git binary (ADR-042).
 	Git *GitConfig
+
+	// Descriptor is the out-of-band bootstrap descriptor (--bootstrap-descriptor),
+	// nil when none was supplied. chain/chain-head projects the accepted chain head
+	// from its descriptor-pinned repository/component; without it that check is a
+	// loud SKIP (the descriptor is the authority, ADR-027/028 — it is never CLI-
+	// synthesized).
+	Descriptor *chain.BootstrapDescriptor
 
 	// Simulate inputs. Message is the commit-message content to classify (nil
 	// when no --message was supplied), resolved at the command boundary from a
