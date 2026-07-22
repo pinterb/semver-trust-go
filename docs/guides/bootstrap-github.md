@@ -72,7 +72,11 @@ mkdir .semver-trust
 The minimal single-maintainer policy — `threshold = "T2"` because T2 is what
 one accountable human can honestly produce, and `required_level = "T2"` on the
 meta-paths so you can never lock yourself out (the full reasoning:
-[choosing threshold and strategy](../reference/policy.md#choosing-threshold-and-strategy)):
+[choosing threshold and strategy](../reference/policy.md#choosing-threshold-and-strategy)).
+`.github/rulesets/**` is in `[meta].paths` from the founding commit even though
+those files arrive in §5: they *are* the platform root of trust, so the commit
+that introduces them — and every later edit the drift check treats as
+authoritative — must itself reach `required_level`, not sneak in at T0:
 
 ```sh
 cat > .semver-trust/policy.toml <<'EOF'
@@ -82,7 +86,11 @@ threshold = "T2"
 strategy  = "demote"
 
 [meta]
-paths = [".semver-trust/**", ".github/workflows/**"]
+paths = [
+  ".semver-trust/**",
+  ".github/workflows/**",
+  ".github/rulesets/**",
+]
 required_level = "T2"
 
 [identity]
@@ -243,7 +251,7 @@ table in effect:
 ```console
 $ semver-trust policy validate --repo .
 policy .semver-trust/policy.toml is valid (schema 0.1)
-digest:      sha256:f99fd6fe3717fc9a2c3cc6a74b3c99eff8a11cfb8a9fd04b53fd070ad6d80b81
+digest:      sha256:ac8f26074370ef7b2d0e850d7a716ca801af2c9b8991d690f19e7959d5499dd5
 threshold:   T2
 strategy:    demote
 ...
@@ -304,14 +312,42 @@ git push -u origin main`. The command blocks in this section touch a real GitHub
 account, so — unlike the local steps above — they are shown representatively;
 adapt the owner, name, and visibility to yours.
 
+### Register your commit key with GitHub
+
+GitHub marks a commit **Verified** only when the *account* carries its public key
+as a **signing** key — and the history-integrity ruleset below rejects every commit
+whose signature GitHub cannot verify. SemVer-Trust enrollment (§2) taught your
+*local* verifier to trust the key; it tells GitHub nothing. Register it once, as a
+signing key (this is separate from any authentication key —
+[GitHub's signing-key docs](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account?tool=cli)):
+
+```sh
+gh ssh-key add ~/.ssh/semver-trust-commit.pub --type signing --title "semver-trust commit signing"
+```
+
+For a GPG commit key, `gh gpg-key add <exported-public-key>.asc` instead. A key
+GitHub already shows as Verified on your commits (the reuse path in §1) needs
+nothing here. Skip this on the fresh-key path and the first push after the ruleset
+import is rejected — the platform rule doing its job.
+
 ### Protect the branch
 
 Verification assumes the history on `main` is signed and unrewritten and that
 meta-path changes were reviewed — but only the *platform* enforces that between
 pushes. This repository commits its branch protection as two importable rulesets
 ([.github/rulesets/README.md](../../.github/rulesets/README.md)); they target
-`~DEFAULT_BRANCH`, so they drop into any new repository unchanged. Commit them
-(trust-sensitive config — path-scope the add), push, and import:
+`~DEFAULT_BRANCH`, so they drop into any new repository unchanged.
+
+> **Plan prerequisite:** rulesets on a **private** repository require a paid plan
+> (Pro, Team, or Enterprise Cloud); GitHub Free offers them only on **public**
+> repositories
+> ([ruleset availability](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets)).
+> On Free with a private repo, make the repo public, upgrade, or fall back to
+> classic branch protection (Settings → Branches — configured by hand, not
+> imported from these JSON files, and without the merge-method restriction).
+
+Commit the rulesets (trust-sensitive config — path-scope the add), push, and
+import:
 
 ```sh
 mkdir -p .github/rulesets    # then copy the two branch-main-*.json files in
@@ -338,8 +374,8 @@ PR is required, but a GitHub *approval* is not, because your trust signal is a
 **signed review attestation** (`attest review`, §8), not the green checkmark. As
 the sole maintainer you review your own agent-assisted work to T2 (spec
 repository ADR-025), and the Admin bypass lets you push the signed merge.
-Rulesets are available on private repositories; confirm both imports took effect
-(a test push the rules reject is the confirmation).
+Confirm both imports took effect — a test push the rules reject is the
+confirmation.
 
 ### Merge and Actions settings
 
