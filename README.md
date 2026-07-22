@@ -20,11 +20,12 @@ zero-tooling guarantee ([conformance coverage](docs/conformance-coverage.md)).
 
 ## Status
 
-`v0.1.0` is released. This is the official Go reference implementation of
-SemVer-Trust. It vendors the specification's **draft v0.10** conformance
-vectors (digest-pinned — see [the spec repository](https://github.com/semver-trust/spec));
-which protocol capabilities are enforced versus still being adopted is tracked
-in [docs/conformance-coverage.md](docs/conformance-coverage.md).
+The latest release is **`v0.3.0`** (its full release line is described below).
+This is the official Go reference implementation of SemVer-Trust. It vendors the
+specification's **draft v0.10** conformance vectors (digest-pinned — see [the spec
+repository](https://github.com/semver-trust/spec)); which protocol capabilities
+are enforced versus still being adopted is tracked in
+[docs/conformance-coverage.md](docs/conformance-coverage.md).
 
 The repository releases *itself* under the scheme it implements. Its published
 line runs `v0.1.0`–`v0.2.1` on the default `release/v0.1` chain, then **continues
@@ -144,6 +145,9 @@ clean, or the trust-tagged pre-release channel that default resolution defers
 
 | Command | What it does |
 |---|---|
+| `setup` | Configure this clone's git for signing (`--signing-key` or `--gpg-signing-key`) — repo-local config only, all-or-nothing, never `--global` or a hook. |
+| `enroll` | Generate the byte-exact registry material for a signing key — an allowed-signers line (`--commit-key`/`--attest-key`) or an armored keyring block (`--gpg-pubkey`); print-by-default, `--write` appends it atomically. |
+| `doctor` | Read-only environment diagnosis — surfaces what verification would abort or mis-price, with the exact fix, and ends by printing the `verify` it preempts; never writes. |
 | `verify` | Walk a release range and report per-commit provenance and effective trust (§10 steps 1–7); fails closed on anything unverifiable. |
 | `release` | Decide the channel and version, then create the signed tag and emit the release attestation (§10 steps 8–9). |
 | `promote` | Re-decide a pre-release at its own SHA with new evidence; if it now qualifies, cut the clean tag on the identical commit with a superseding attestation (§7.3). |
@@ -151,8 +155,10 @@ clean, or the trust-tagged pre-release channel that default resolution defers
 | `policy validate` / `policy explain` | Parse a policy and print its digest, or render the decision table in effect. |
 | `list` / `latest` / `next` / `tag` | Zero-configuration plain-mode tag operations (node-semver parity). |
 
-Full flag-level reference: [docs/cli/](docs/cli/semver-trust.md) (generated from
-the command tree via `task docs:cli`).
+The first three — `setup`, `enroll`, `doctor` — are the **bootstrap family**
+(adopting a repository, or joining one); the [guides](docs/README.md) walk them
+per persona. Full flag-level reference: [docs/cli/](docs/cli/semver-trust.md)
+(generated from the command tree via `task docs:cli`).
 
 ## Documentation
 
