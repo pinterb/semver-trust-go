@@ -13,28 +13,44 @@ repositories reach for ([adopting on an existing repository](adopt-legacy-github
 never applies to you, and if you never merge through GitHub's web UI you never
 need GitHub's web-flow key in your keyring at all.
 
-## 1. Generate two keys, for two purposes
+## 1. Two keys, for two purposes
 
-A commit-signing key (signs your work) and a *separate* attestation key (signs
-your accountability statements — reviews and releases). The
-[two-key model](../reference/trust-material.md#two-keys-two-purposes) explains
-why they must not be one key.
+Two keys with different jobs: a **commit-signing key** (signs your work) and a
+*separate* **attestation key** (signs your accountability statements — reviews
+and releases). The [two-key model](../reference/trust-material.md#two-keys-two-purposes)
+explains why they must not be one key — and the tools enforce it (`enroll`,
+`setup`, and `doctor` all refuse a key enrolled for both).
+
+**The commit-signing key is your normal git signing identity — reuse the one you
+already have** (the key on your GitHub account, or whatever you already sign
+commits with); there is no need to mint a new one per repository. Find it:
+
+```sh
+git config --get user.signingkey             # already signing? this is your key
+ls -1 ~/.ssh/*.pub                           # SSH public keys on this machine
+gpg --list-secret-keys --keyid-format long   # GPG keys (the id after ed25519/ or rsa4096/)
+```
+
+Only generate a commit key if you don't have one:
 
 ```sh
 ssh-keygen -t ed25519 -f ~/.ssh/semver-trust-commit -C 'alex@example.com commit signing'
+```
+
+**The attestation key is always a fresh, dedicated SSH key** — it must be distinct
+from your commit key (ADR-022), and attestations are always OpenSSH SSHSIG, never
+GPG. Generate it regardless of how you sign commits:
+
+```sh
 ssh-keygen -t ed25519 -f ~/.ssh/semver-trust-attest -C 'semver-trust attestation signing'
 ```
 
-> **Prefer GPG for commit signing?** Use an existing OpenPGP key, or generate
-> one, in place of the commit-signing SSH key above — SemVer-Trust verifies
-> GPG-signed history just as well ([GPG-signed history](../reference/trust-material.md)):
->
-> ```sh
-> gpg --quick-generate-key "Alex Doe <alex@example.com>" ed25519 sign
-> ```
->
-> The **attestation** key stays SSH regardless: attestations are OpenSSH SSHSIG
-> signatures (ADR-022), never GPG. Step 2 shows the GPG commit-signing setup.
+> **Using GPG for commit signing?** Reuse (or generate) an OpenPGP key for your
+> commits — SemVer-Trust verifies GPG-signed history just as well
+> ([GPG-signed history](../reference/trust-material.md)). Find its id with
+> `gpg --list-secret-keys --keyid-format long`, or generate one with
+> `gpg --quick-generate-key "Alex Doe <alex@example.com>" ed25519 sign`. §2 shows
+> the GPG commit-signing setup; the attestation key above stays SSH regardless.
 
 ## 2. Trust material in the very first commit
 

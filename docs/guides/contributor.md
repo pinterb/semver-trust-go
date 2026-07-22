@@ -27,18 +27,30 @@ Four things, and only the first two touch your daily flow:
 
 ## One-time setup
 
-You need a signing key; then one command wires up this clone. Generate a key
-if you don't already have one:
+You sign commits with an SSH or GPG key. **If you already have one — the key on
+your GitHub account, or whatever you already sign commits with — reuse it; there
+is no need to mint a new key per repository.** Find it:
+
+```sh
+git config --get user.signingkey             # already signing? this is your key
+ls -1 ~/.ssh/*.pub                           # SSH public keys on this machine
+ssh-add -L                                   # keys currently loaded in your agent
+gpg --list-secret-keys --keyid-format long   # GPG keys (the id after ed25519/ or rsa4096/)
+```
+
+Only generate a fresh key if you don't have one:
 
 ```sh
 ssh-keygen -t ed25519 -f ~/.ssh/semver-trust-commit -C 'you@example.com commit signing'
 ```
 
-`semver-trust setup` configures **this clone's git for you** — repo-local
-config only, never `--global`, never the working tree:
+`semver-trust setup` then wires **this clone's git** to whichever key you chose —
+repo-local config only, never `--global`, never the working tree. Point it at
+your SSH public-key path, or pass a GPG key id:
 
 ```sh
-semver-trust setup --signing-key ~/.ssh/semver-trust-commit.pub
+semver-trust setup --signing-key ~/.ssh/semver-trust-commit.pub   # or YOUR existing .pub
+# for a GPG signing key instead:  semver-trust setup --gpg-signing-key <YOUR-GPG-KEY-ID>
 ```
 
 ```text
