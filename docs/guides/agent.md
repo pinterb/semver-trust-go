@@ -102,6 +102,14 @@ When you author a commit here:
 - You MUST NOT emit review or release attestations. Signing an attestation is
   a human accountability act (specification Principle 2); it cannot be
   delegated to you.
+- You MUST NOT run the trust-material *write* commands — `semver-trust enroll`
+  and `semver-trust setup`. Enrolling a key and configuring the signing
+  environment are human accountability acts (spec repository ADR-038), like
+  committing and signing. The one bootstrap-family command sanctioned for you is
+  the read-only diagnostic: run `semver-trust doctor --persona agent` at session
+  start, `--persona agent --message <msgfile>` before you commit, and
+  `--persona agent --commit HEAD` after — it writes nothing and restricts itself
+  to a side-effect-free subset of checks.
 - Before editing any file matched by the policy's `[meta] paths` (the policy
   itself, trust registries, CI workflows, branch-protection artifacts), you
   MUST surface the change to your human operator rather than pushing it

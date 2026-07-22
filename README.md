@@ -144,6 +144,9 @@ clean, or the trust-tagged pre-release channel that default resolution defers
 
 | Command | What it does |
 |---|---|
+| `setup` | Configure this clone's git for signing (`--signing-key` or `--gpg-signing-key`) — repo-local config only, all-or-nothing, never `--global` or a hook. |
+| `enroll` | Generate the byte-exact registry line for a signing key (`--commit-key`/`--attest-key`/`--gpg-pubkey`), print-by-default; `--write` appends it atomically. |
+| `doctor` | Read-only environment diagnosis — surfaces what verification would abort or mis-price, with the exact fix, and ends by printing the `verify` it preempts; never writes. |
 | `verify` | Walk a release range and report per-commit provenance and effective trust (§10 steps 1–7); fails closed on anything unverifiable. |
 | `release` | Decide the channel and version, then create the signed tag and emit the release attestation (§10 steps 8–9). |
 | `promote` | Re-decide a pre-release at its own SHA with new evidence; if it now qualifies, cut the clean tag on the identical commit with a superseding attestation (§7.3). |
@@ -151,8 +154,10 @@ clean, or the trust-tagged pre-release channel that default resolution defers
 | `policy validate` / `policy explain` | Parse a policy and print its digest, or render the decision table in effect. |
 | `list` / `latest` / `next` / `tag` | Zero-configuration plain-mode tag operations (node-semver parity). |
 
-Full flag-level reference: [docs/cli/](docs/cli/semver-trust.md) (generated from
-the command tree via `task docs:cli`).
+The first three — `setup`, `enroll`, `doctor` — are the **bootstrap family**
+(adopting a repository, or joining one); the [guides](docs/README.md) walk them
+per persona. Full flag-level reference: [docs/cli/](docs/cli/semver-trust.md)
+(generated from the command tree via `task docs:cli`).
 
 ## Documentation
 

@@ -50,7 +50,9 @@ adds this repository's rules and wins where stricter.
 ## Layout and conventions
 
 - `cmd/semver-trust/` — CLI entrypoint (`verify`, `release`, `attest`,
-  `policy`, the plain-mode `list`/`latest`/`next`/`tag`).
+  `policy`, the bootstrap family `doctor`/`enroll`/`setup`, and the plain-mode
+  `list`/`latest`/`next`/`tag`). Of the family, only `doctor --persona agent` is
+  agent-sanctioned; `enroll`/`setup` write trust material and are human acts.
 - `internal/` — everything not part of the public plugin API:
   `version`/`plain` (parsers + plain mode), `vcs`, `sshsig`/`pgp` (signing
   key families), `trust`, `policy`, `attest`, and `verify` (the
