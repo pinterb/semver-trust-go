@@ -136,6 +136,22 @@ func isUnsetKey(err error) bool {
 	return errors.As(err, &ee) && ee.ExitCode() == 1
 }
 
+// GetLocal reads a repo-LOCAL config value (git config --local --get <key>) — the
+// scope setup writes, and therefore the scope its conflict detection compares
+// against: a value inherited from global or an include is OVERRIDDEN by a local
+// write, not clobbered, so it is not a conflict. A genuinely-unset local key is
+// ("", nil); a real failure (invalid config, exec error) surfaces.
+func (g Git) GetLocal(key string) (string, error) {
+	out, err := g.run("config", "--local", "--get", key)
+	if err != nil {
+		if isUnsetKey(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return out, nil
+}
+
 // Set writes a single repo-local config key (git config <key> <value>), under git's
 // own config.lock protocol.
 func (g Git) Set(key, value string) error {

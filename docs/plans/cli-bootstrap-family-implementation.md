@@ -65,8 +65,10 @@ duplicate/cross-registry (ADR-040) refusal + `Resolve` self-check), `enroll` com
 M4 tasks: [x] PR-A promote the git-binary layer → `internal/gitconfig` (`Config`/`Load` reader +
 `Git` writer handle: `Set`/`Unset`/`AddFetch`/`FetchRefspecs`/`RemoteURL`), doctor
 `config/git-binary` check surfaces the resolved git path (PATH-hijack visibility, ADR-042) ·
-[ ] PR-B `internal/setup` planner (all-or-nothing conflicts, `--force` never `user.signingkey`,
-`config.RefSpec` idempotency, ADR-022 cross-check, euid/GIT_DIR/bare refusals) · [ ] PR-C
+[x] PR-B `internal/setup` planner (`gitconfig.Git.GetLocal` — conflicts vs the LOCAL scope, so a
+global/included value is overridden not clobbered; all-or-nothing conflicts, `--force` never
+`user.signingkey`, `config.RefSpec` idempotency, ADR-022 cross-check, euid/GIT_DIR/bare refusals) ·
+[ ] PR-C
 `setup` command (env-echo + git-binary surface, `--dry-run` git-config commands, reversal receipt,
 worktree/bare handling).
 
