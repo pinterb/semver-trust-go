@@ -40,7 +40,7 @@ Status of the milestones, updated as each lands.
 | M1 — P0 seam extraction | Done | #125 |
 | M2 — `doctor` | Done | #128, #130, #131 |
 | M3 — `enroll` | Done | #132, #133 |
-| M4 — `setup` | Done | #134, #135, PR-C |
+| M4 — `setup` | Done | #134, #135, #136 |
 
 M1 tasks: [x] 1.1 export `vcs.GitSSHNamespace` · [x] 1.2 `verify.LoadTrustMaterial` ·
 [x] 1.3 `verify.ClassifyCommit` · [x] 1.4 this progress section.

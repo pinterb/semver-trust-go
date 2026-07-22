@@ -13,88 +13,58 @@ repositories reach for ([adopting on an existing repository](adopt-legacy-github
 never applies to you, and if you never merge through GitHub's web UI you never
 need GitHub's web-flow key in your keyring at all.
 
-## 1. Generate two keys, for two purposes
+## 1. Two keys, for two purposes
 
-A commit-signing key (signs your work) and a *separate* attestation key (signs
-your accountability statements — reviews and releases). The
-[two-key model](../reference/trust-material.md#two-keys-two-purposes) explains
-why they must not be one key.
+Two keys with different jobs: a **commit-signing key** (signs your work) and a
+*separate* **attestation key** (signs your accountability statements — reviews
+and releases). The [two-key model](../reference/trust-material.md#two-keys-two-purposes)
+explains why they must not be one key — and the tools enforce it (`enroll`,
+`setup`, and `doctor` all refuse a key enrolled for both).
+
+**The commit-signing key is your normal git signing identity — reuse the one you
+already have** (the key on your GitHub account, or whatever you already sign
+commits with); there is no need to mint a new one per repository. Find it:
 
 ```sh
-ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_signing -C 'alex@example.com commit signing'
+git config --get user.signingkey             # already signing? this is your key
+ls -1 ~/.ssh/*.pub                           # SSH public keys on this machine
+gpg --list-secret-keys --keyid-format long   # GPG keys (the id after ed25519/ or rsa4096/)
+```
+
+Only generate a commit key if you don't have one:
+
+```sh
+ssh-keygen -t ed25519 -f ~/.ssh/semver-trust-commit -C 'alex@example.com commit signing'
+```
+
+**The attestation key is always a fresh, dedicated SSH key** — it must be distinct
+from your commit key (ADR-022), and attestations are always OpenSSH SSHSIG, never
+GPG. Generate it regardless of how you sign commits:
+
+```sh
 ssh-keygen -t ed25519 -f ~/.ssh/semver-trust-attest -C 'semver-trust attestation signing'
 ```
 
-> **Prefer GPG for commit signing?** Use an existing OpenPGP key, or generate
-> one, in place of the commit-signing SSH key above — SemVer-Trust verifies
-> GPG-signed history just as well ([GPG-signed history](../reference/trust-material.md)):
->
-> ```sh
-> gpg --quick-generate-key "Alex Doe <alex@example.com>" ed25519 sign
-> ```
->
-> The **attestation** key stays SSH regardless: attestations are OpenSSH SSHSIG
-> signatures (ADR-022), never GPG. Step 2 shows the GPG commit-signing setup.
+> **Using GPG for commit signing?** Reuse (or generate) an OpenPGP key for your
+> commits — SemVer-Trust verifies GPG-signed history just as well
+> ([GPG-signed history](../reference/trust-material.md)). Find its id with
+> `gpg --list-secret-keys --keyid-format long`, or generate one with
+> `gpg --quick-generate-key "Alex Doe <alex@example.com>" ed25519 sign`. §2 shows
+> the GPG commit-signing setup; the attestation key above stays SSH regardless.
 
 ## 2. Trust material in the very first commit
 
 Verification reads trust material **from the tree of the commit being
 verified** — which means the first commit can carry its own roots, and your
 repository is verifiable from inception. Create the repository and the
-`.semver-trust/` directory before anything else:
+`.semver-trust/` directory, and write the policy that names your registries:
 
 ```sh
 git init -b main widget && cd widget
 git config user.name "Alex Doe"
 git config user.email alex@example.com
-git config gpg.format ssh
-git config user.signingkey ~/.ssh/id_ed25519_signing.pub
-git config commit.gpgsign true
-
 mkdir .semver-trust
-printf '%s namespaces="git" %s\n' alex@example.com \
-  "$(cut -d' ' -f1,2 ~/.ssh/id_ed25519_signing.pub)" \
-  > .semver-trust/allowed_signers
-printf '%s namespaces="attestation@semver-trust.dev" %s\n' alex@example.com \
-  "$(cut -d' ' -f1,2 ~/.ssh/semver-trust-attest.pub)" \
-  > .semver-trust/attestation_signers
 ```
-
-([Registry formats](../reference/trust-material.md); note the two different
-namespaces — that separation is the point.)
-
-### Using a GPG key for commit signing instead
-
-If your commits are GPG-signed rather than SSH-signed, configure git for
-OpenPGP and record your **public** key in an armored keyring instead of the
-SSH allowed-signers registry. Everything else is unchanged — the attestation
-registry stays SSH (attestations are always SSHSIG, ADR-022), so keep the
-`attestation_signers` block above exactly as written. Replace only the
-commit-signing configuration and `allowed_signers` with:
-
-```sh
-git config gpg.format openpgp
-git config user.signingkey <YOUR-GPG-KEY-ID>   # long key id or full fingerprint
-git config commit.gpgsign true
-
-# Export your PUBLIC key into the in-tree keyring the verifier reads:
-gpg --armor --export <YOUR-GPG-KEY-ID> > .semver-trust/gpg-keyring.asc
-```
-
-Find `<YOUR-GPG-KEY-ID>` with `gpg --list-secret-keys --keyid-format long`. In
-the policy (next step) point `[identity.human]` at the keyring instead of the
-allowed-signers file:
-
-```toml
-[identity.human]
-gpg_keyring = ".semver-trust/gpg-keyring.asc"
-```
-
-The verifier defaults `--gpg-keyring` from that path when the flag is absent
-(reading it from the tree of the commit under verification), so GPG-signed
-commits verify with no extra flags — exactly as SSH-signed ones do.
-
-## 3. Write the policy
 
 The minimal single-maintainer policy — `threshold = "T2"` because T2 is what
 one accountable human can honestly produce, and `required_level = "T2"` on the
@@ -126,14 +96,105 @@ adapter = "none"
 EOF
 ```
 
+Now enroll your two keys into the registries the policy names. `semver-trust
+enroll` generates the byte-exact registry line and appends it under an atomic
+writer — you never hand-type it (shell quoting eats `namespaces="…"`, and the two
+namespaces must never be transposed):
+
+```sh
+semver-trust enroll --commit-key ~/.ssh/semver-trust-commit.pub --write
+semver-trust enroll --attest-key ~/.ssh/semver-trust-attest.pub --write
+```
+
+```text
+alex@example.com namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL29blAq66u/Q8A7f5sVxnIr0KqPYaRzWzbqC6yUICxF
+
+principal: alex@example.com (from git user.email)
+--commit-key → .semver-trust/allowed_signers  (fingerprint SHA256:7YWX28qJKoJVD0RBuQxH0dsBdy55ktTRuQF7BKLYPME)
+
+wrote .semver-trust/allowed_signers — now commit it: git add .semver-trust && git commit -S
+```
+
+The namespaces (`git` for commit signing, `attestation@semver-trust.dev` for
+attestations) come from compiled-in constants, so they can never be mistyped, and
+enroll refuses to put one key in both registries — the two keys must stay distinct
+(ADR-022). The raw registry line prints on stdout; all guidance is on stderr.
+([Registry formats](../reference/trust-material.md); the two different namespaces
+are the point.)
+
+### Using a GPG key for commit signing instead
+
+If your commits are GPG-signed rather than SSH-signed, make three substitutions
+to the SSH steps above — do them *instead of*, not in addition to. The
+attestation key stays SSH regardless (attestations are always SSHSIG, ADR-022),
+so `semver-trust enroll --attest-key … --write` is unchanged.
+
+1. **In the policy, replace the `[identity.human]` block** — a `gpg_keyring` in
+   place of `allowed_signers` (a keyring, not an SSH registry). The rest of the
+   policy is identical:
+
+   ```toml
+   [identity.human]
+   gpg_keyring = ".semver-trust/gpg-keyring.asc"
+   ```
+
+2. **Skip `enroll --commit-key`** (that enrolls an SSH commit key). Export your
+   **public** key to a file and enroll *that* into the keyring instead — `enroll`
+   refuses private-key material and prints the identities it adds:
+
+   ```sh
+   gpg --armor --export <YOUR-GPG-KEY-ID> > dev.asc   # find it: gpg --list-secret-keys --keyid-format long
+   semver-trust enroll --gpg-pubkey dev.asc --write
+   ```
+
+3. **In `setup` (next step), pass `--gpg-signing-key <YOUR-GPG-KEY-ID>`** in place
+   of `--signing-key`.
+
+The verifier defaults `--gpg-keyring` from the policy path, so GPG-signed commits
+verify with no extra flags — exactly as SSH-signed ones do.
+
+## 3. Configure git, then make the founding commit
+
 Add the commit template (the human trailer default — agents author theirs
 explicitly; see [the shared-machine model](../reference/trailers.md#one-machine-two-authors-humans-and-agents-side-by-side)),
-then make the founding commit:
+then let `semver-trust setup` wire this clone's git in one command:
 
 ```sh
 printf 'Provenance: human\n' > .gitmessage
-git config commit.template .gitmessage
+semver-trust setup --signing-key ~/.ssh/semver-trust-commit.pub
+```
 
+```text
+setup: repo ~/widget  gitdir .git  git /opt/homebrew/bin/git  remote origin ((no url))
+
+  set      gpg.format = ssh
+  set      user.signingkey = ~/.ssh/semver-trust-commit.pub
+  set      commit.gpgsign = true
+  set      commit.template = .gitmessage
+  set      gpg.ssh.allowedSignersFile = .semver-trust/allowed_signers
+  add      remote.origin.fetch += refs/attestations/*:refs/attestations/*
+
+applied. to reverse this setup:
+  git config --unset gpg.format
+  git config --unset user.signingkey
+  git config --unset commit.gpgsign
+  git config --unset commit.template
+  git config --unset gpg.ssh.allowedSignersFile
+  git config --unset remote.origin.fetch "refs/attestations/\*:refs/attestations/\*"
+```
+
+`setup` runs **after** the policy, registries, and `.gitmessage` exist — so
+`commit.template` and `gpg.ssh.allowedSignersFile` bind to real files — and
+**before** the first commit, so that commit is signed and trailered. It writes
+repo-local config only (never `--global`; for a GPG commit key use
+`--gpg-signing-key <YOUR-GPG-KEY-ID>` instead). It installs **no** hook — enable
+the committed [commit-msg hook](../reference/trailers.md#the-commit-msg-hook)
+yourself, once, with `git config core.hooksPath .githooks`.
+
+Make the founding commit — path-scoped, so the adoption reads as a pure
+accountability act:
+
+```sh
 git add .semver-trust .gitmessage
 git commit -m "chore: adopt semver-trust" -m "Provenance: human"
 ```
@@ -141,8 +202,8 @@ git commit -m "chore: adopt semver-trust" -m "Provenance: human"
 Two ordering invariants make that founding commit clean — both about
 *sequence*, not content:
 
-- **Signing and the trailer template are configured before it** (the `git
-  config` lines above). An unsigned or untrailered first commit isn't fatal,
+- **Signing and the trailer template are configured before it** (what
+  `semver-trust setup` did above). An unsigned or untrailered first commit isn't fatal,
   but it is the one mistake that recreates on day one the adoption-boundary
   problem greenfield exists to avoid — and while the repository is still
   unshared, `git rebase`-and-resign is the clean recovery (rewriting history is
@@ -152,7 +213,29 @@ Two ordering invariants make that founding commit clean — both about
   reviewers re-derive later, so they should read as pure accountability acts,
   not code changes with the trust material buried inside.
 
-Sanity-check the policy immediately:
+Sanity-check the environment immediately. `semver-trust doctor` runs the
+read-only checks that surface, now, what verification would later abort or
+mis-price — and ends by printing the exact `verify` invocation it preempts:
+
+```text
+semver-trust doctor — persona: maintainer
+
+  PASS  config/git-binary               git binary: /opt/homebrew/bin/git
+  PASS  config/signing-enabled          commit signing enabled
+  PASS  policy/parse                    policy parses; matches HEAD
+  PASS  registry/principal-enrolled     alex@example.com is enrolled in allowed_signers
+  PASS  keys/attestation-distinct       commit signing key is distinct from the attestation keys
+  PASS  policy/meta-coverage            meta-paths cover the policy, registries, and CI workflows
+  PASS  keys/sign-roundtrip             signing key round-trips (signs + verifies a compiled-in constant)
+  PASS  remote/fetch-refspec            attestation fetch refspec is configured
+  …
+
+next, run the gate doctor preempts:
+  semver-trust verify --repo . --to HEAD
+```
+
+The policy itself is validated the same way — its digest and the §6.4 decision
+table in effect:
 
 ```console
 $ semver-trust policy validate --repo .
@@ -263,9 +346,10 @@ git push origin main --tags
 git push origin 'refs/attestations/*:refs/attestations/*'
 ```
 
-Set the fetch refspec once so every later `git fetch`/`pull` pulls new evidence
-automatically — the push side stays an explicit command
-([why](../reference/attestation-refs.md#moving-them)):
+`semver-trust setup` already set the fetch refspec (§3), so every later `git
+fetch`/`pull` in this clone pulls new evidence automatically — the push side
+stays an explicit command ([why](../reference/attestation-refs.md#moving-them)).
+A fresh clone that hasn't run `setup` can add it directly:
 
 ```sh
 git config --add remote.origin.fetch 'refs/attestations/*:refs/attestations/*'

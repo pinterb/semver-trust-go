@@ -35,15 +35,25 @@ A repository under the scheme distinguishes *committing* from *attesting*:
 Keeping them separate is least privilege (spec repository ADR-022): the
 attestation key asserts *"I reviewed this range"* and *"I stand behind this
 release"* — a stolen commit key must not be able to fabricate those
-statements. Generate both as plain SSH ed25519 keys:
+statements. The two keys reuse differently:
 
-```sh
-# Commit signing (skip if you already sign commits with SSH)
-ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_signing -C 'you@example.com commit signing'
+- **Commit-signing key — reuse yours.** It is your ordinary git signing identity;
+  if you already sign commits (SSH or GPG), reuse that key rather than minting a
+  new one per repository. Find it with `git config --get user.signingkey`,
+  `ls -1 ~/.ssh/*.pub`, `ssh-add -L`, or (GPG) `gpg --list-secret-keys
+  --keyid-format long`. Generate one only if you have none:
 
-# Attestation signing (dedicated; note the different file)
-ssh-keygen -t ed25519 -f ~/.ssh/semver-trust-attest -C 'semver-trust attestation signing'
-```
+  ```sh
+  ssh-keygen -t ed25519 -f ~/.ssh/semver-trust-commit -C 'you@example.com commit signing'
+  ```
+
+- **Attestation key — always dedicated.** A fresh SSH ed25519 key, distinct from
+  the commit key and never a GPG key (attestations are SSHSIG); `enroll`, `setup`,
+  and `doctor` refuse a key that serves both roles:
+
+  ```sh
+  ssh-keygen -t ed25519 -f ~/.ssh/semver-trust-attest -C 'semver-trust attestation signing'
+  ```
 
 ## `allowed_signers` — the commit-signer registry
 
@@ -107,10 +117,14 @@ verification means.
 
 The flow for a new contributor:
 
-1. Contributor generates a signing key and configures git to sign with it
-   (see the [contributor guide](../guides/contributor.md)).
-2. Contributor opens a PR adding one line to `.semver-trust/allowed_signers`
-   with their principal and public key.
+1. Contributor configures this clone with `semver-trust setup` (reusing an
+   existing signing key, or a new one) and generates their enrollment with
+   `semver-trust enroll` — an SSH commit key into `allowed_signers`
+   (`enroll --commit-key <key>.pub`), or a GPG key into the `gpg_keyring`
+   (`enroll --gpg-pubkey <key>.asc`). The key family must match what the policy's
+   `[identity.human]` declares; see the [contributor guide](../guides/contributor.md).
+2. Contributor opens a PR adding that trust material to the registry the policy
+   names.
 3. A maintainer reviews the line against out-of-band knowledge of the person
    (this is the human judgment the cryptography anchors) and merges it through
    the normal meta-path gate.
