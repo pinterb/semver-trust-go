@@ -298,19 +298,28 @@ telling you what evidence exists so far.
 
 ## 5. Create the GitHub repository, then harden it
 
-Everything so far is local. Create the remote and push — `gh` (the GitHub CLI)
-does both at once. This repository is private and single-maintainer:
+Everything so far is local. Create the repository on GitHub and push `main` to
+it. One wrinkle from the order of these steps: `semver-trust setup` (§3) already
+created a local `origin` — the attestation fetch refspec, with **no URL yet**
+(`remote origin ((no url))` in its output above). So you point *that* remote at
+the new repository; `gh repo create --source=. --remote=origin` would run `git
+remote add origin` under the hood and fail with `Unable to add remote "origin"`.
 
 ```sh
-gh repo create <owner>/widget --private --source=. --remote=origin --push
+gh repo create <owner>/widget --private          # create the empty repo (--public for an open project)
+git remote set-url origin https://github.com/<owner>/widget.git   # point setup's origin at it — not `remote add`
+git config --add remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'   # the branch refspec setup didn't add
+git push -u origin main
 ```
 
-That creates the repository, wires it as `origin`, and pushes `main` (use
-`--public` for an open project). Without `gh`: create an empty repository on
-github.com, then `git remote add origin git@github.com:<owner>/widget.git &&
-git push -u origin main`. The command blocks in this section touch a real GitHub
-account, so — unlike the local steps above — they are shown representatively;
-adapt the owner, name, and visibility to yours.
+`set-url` (not `remote add`) because `origin` already exists; the extra fetch
+refspec restores branch tracking — `setup` added only the attestation refspec, so
+without this line `git fetch` would pull attestations but not branches. Without
+`gh`: create an empty repository in the GitHub UI, then run the same three git
+commands (swap in the SSH URL `git@github.com:<owner>/widget.git` if that is your
+remote protocol). The command blocks in this section touch a real GitHub account,
+so — unlike the local steps above — they are shown representatively; adapt the
+owner, name, and visibility to yours.
 
 ### Register your commit key with GitHub
 
