@@ -22,17 +22,13 @@ func sshEnv() Env {
 	}
 }
 
-// localCurrents reads the repo-LOCAL value of every managed key — what the PR-C
-// command populates Env.Current with, so a global/included value never leaks in.
+// localCurrents reads the repo-LOCAL value of every managed key — what the command
+// populates Env.Current with, so a global/included value never leaks in.
 func localCurrents(t *testing.T, git gitconfig.Git) map[string]string {
 	t.Helper()
-	cur := map[string]string{}
-	for _, k := range []string{keyGPGFormat, keySigningKey, keyCommitGPGSign, keyCommitTemplate, keyAllowedSigners} {
-		v, err := git.GetLocal(k)
-		if err != nil {
-			t.Fatalf("GetLocal %s: %v", k, err)
-		}
-		cur[k] = v
+	cur, err := ReadCurrents(git)
+	if err != nil {
+		t.Fatalf("ReadCurrents: %v", err)
 	}
 	return cur
 }

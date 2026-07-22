@@ -40,7 +40,7 @@ Status of the milestones, updated as each lands.
 | M1 — P0 seam extraction | Done | #125 |
 | M2 — `doctor` | Done | #128, #130, #131 |
 | M3 — `enroll` | Done | #132, #133 |
-| M4 — `setup` | In progress | PR-A (gitconfig + writer) |
+| M4 — `setup` | Done | #134, #135, PR-C |
 
 M1 tasks: [x] 1.1 export `vcs.GitSSHNamespace` · [x] 1.2 `verify.LoadTrustMaterial` ·
 [x] 1.3 `verify.ClassifyCommit` · [x] 1.4 this progress section.
@@ -68,9 +68,9 @@ M4 tasks: [x] PR-A promote the git-binary layer → `internal/gitconfig` (`Confi
 [x] PR-B `internal/setup` planner (`gitconfig.Git.GetLocal` — conflicts vs the LOCAL scope, so a
 global/included value is overridden not clobbered; all-or-nothing conflicts, `--force` never
 `user.signingkey`, `config.RefSpec` idempotency, ADR-022 cross-check, euid/GIT_DIR/bare refusals) ·
-[ ] PR-C
-`setup` command (env-echo + git-binary surface, `--dry-run` git-config commands, reversal receipt,
-worktree/bare handling).
+[x] PR-C `setup` command — env-echo first line (repo/gitdir/**git binary**/remote+URL),
+`--dry-run` emits the `git config` commands, reversal receipt, bare refused + linked-worktree
+supported-with-disclosure, `root.AddCommand`, `docs:cli`. **The bootstrap family is complete.**
 
 ## Corrections to the proposal (verified against `main`)
 

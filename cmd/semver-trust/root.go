@@ -42,6 +42,7 @@ latest, next, and tag.`,
 	root.AddCommand(newVerifyCmd())
 	root.AddCommand(newDoctorCmd())
 	root.AddCommand(newEnrollCmd())
+	root.AddCommand(newSetupCmd())
 	root.AddCommand(newReleaseCmd())
 	root.AddCommand(newPromoteCmd())
 	root.AddCommand(newAttestCmd())

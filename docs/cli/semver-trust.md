@@ -35,6 +35,7 @@ latest, next, and tag.
 * [semver-trust policy](semver-trust_policy.md)	 - Validate and explain the repository policy (§9)
 * [semver-trust promote](semver-trust_promote.md)	 - Promote a pre-release to the clean channel on the identical SHA (spec §7.3, ADR-009)
 * [semver-trust release](semver-trust_release.md)	 - Evaluate, decide, and emit a release: signed tag + release attestation (spec §10 steps 8-9)
+* [semver-trust setup](semver-trust_setup.md)	 - Configure this clone's git for semver-trust (repo-local config only)
 * [semver-trust tag](semver-trust_tag.md)	 - Create an annotated tag at HEAD: the given name or the computed next version
 * [semver-trust verify](semver-trust_verify.md)	 - Verify a release range's provenance and trust (spec §10 steps 1–7)
 * [semver-trust version](semver-trust_version.md)	 - Print the tool version and conformance pin

@@ -34,6 +34,25 @@ const (
 	AttestationRefspec = "refs/attestations/*:refs/attestations/*"
 )
 
+// ManagedKeys is the closed set of config keys setup reads (for the local-scope
+// current values) and may write — the complete surface of what setup touches.
+var ManagedKeys = []string{keyGPGFormat, keySigningKey, keyCommitGPGSign, keyCommitTemplate, keyAllowedSigners}
+
+// ReadCurrents reads the repo-LOCAL value of every managed key — the Env.Current map
+// Compute needs, so a value inherited from global or an include never leaks into
+// conflict detection. A real read failure surfaces (fail closed).
+func ReadCurrents(git gitconfig.Git) (map[string]string, error) {
+	cur := map[string]string{}
+	for _, k := range ManagedKeys {
+		v, err := git.GetLocal(k)
+		if err != nil {
+			return nil, err
+		}
+		cur[k] = v
+	}
+	return cur, nil
+}
+
 // Action is what setup will do with one key.
 type Action string
 
