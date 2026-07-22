@@ -175,11 +175,15 @@ func TestRegistryChecks(t *testing.T) {
 	}
 }
 
-// noCommitRepo builds a repo whose policy + allowed_signers exist on disk and
-// parse, but which has no commit yet — HEAD does not resolve, so the drift
-// comparison against HEAD cannot run (the fresh-bootstrap case a maintainer
-// hits before the founding commit).
-func noCommitRepo(t *testing.T) string {
+// parseCheckRepo builds a dir with a parseable policy + allowed_signers in the
+// working tree, in one of the git states the drift checks must tell apart:
+//
+//	"no-head"      a git repo with no commits — HEAD does not resolve
+//	"file-absent"  a git repo whose seed commit omits the trust material, so HEAD
+//	               resolves but the files are absent from its tree
+//	"not-a-repo"   a plain directory that will not open as a git repository — a
+//	               genuine tree-read error, not a fresh-bootstrap state
+func parseCheckRepo(t *testing.T, state string) string {
 	t.Helper()
 	repo := t.TempDir()
 	run := func(args ...string) {
@@ -187,9 +191,11 @@ func noCommitRepo(t *testing.T) string {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
 	}
-	run("init", "-q")
-	run("config", "user.email", "alex@example.com")
-	run("config", "user.name", "Alex")
+	if state != "not-a-repo" {
+		run("init", "-q")
+		run("config", "user.email", "alex@example.com")
+		run("config", "user.name", "Alex")
+	}
 
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -211,6 +217,13 @@ func noCommitRepo(t *testing.T) string {
 		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if state == "file-absent" {
+		// A seed commit that does NOT include the trust material: HEAD resolves,
+		// but the policy/registry files are absent from its tree.
+		write("README.md", "# widget\n")
+		run("add", "README.md")
+		run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "init")
 	}
 	write(".semver-trust/policy.toml", `[policy]
 version   = "0.1"
@@ -244,7 +257,7 @@ func TestParseChecksNoCommits(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not on PATH")
 	}
-	env := envFor(t, noCommitRepo(t), Maintainer)
+	env := envFor(t, parseCheckRepo(t, "no-head"), Maintainer)
 
 	if r := checkPolicyParse(env); r.Severity != PASS {
 		t.Errorf("policy/parse (no commits) = %s %q, want PASS", r.Severity, r.Message)
@@ -256,6 +269,55 @@ func TestParseChecksNoCommits(t *testing.T) {
 		t.Errorf("registry/parse (no commits) = %s %q, want PASS", r.Severity, r.Message)
 	} else if strings.Contains(r.Message, "matches HEAD") {
 		t.Errorf("registry/parse (no commits) must not claim 'matches HEAD' — nothing was compared; Message=%q", r.Message)
+	}
+}
+
+// TestParseChecksHeadFileAbsent covers the other fresh-bootstrap shape: HEAD
+// resolves, but the trust material is not yet in its tree. Still a legitimate
+// "not yet committed" PASS — no false "matches HEAD".
+func TestParseChecksHeadFileAbsent(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	env := envFor(t, parseCheckRepo(t, "file-absent"), Maintainer)
+
+	if r := checkPolicyParse(env); r.Severity != PASS {
+		t.Errorf("policy/parse (file absent from HEAD) = %s %q, want PASS", r.Severity, r.Message)
+	} else if strings.Contains(r.Message, "matches HEAD") {
+		t.Errorf("policy/parse (file absent from HEAD) must not claim 'matches HEAD'; Message=%q", r.Message)
+	}
+
+	if r := checkRegistryParse(env); r.Severity != PASS {
+		t.Errorf("registry/parse (file absent from HEAD) = %s %q, want PASS", r.Severity, r.Message)
+	} else if strings.Contains(r.Message, "matches HEAD") {
+		t.Errorf("registry/parse (file absent from HEAD) must not claim 'matches HEAD'; Message=%q", r.Message)
+	}
+}
+
+// TestParseChecksTreeReadError pins the non-bootstrap error path: when the HEAD
+// tree read fails for a real reason (here, the dir is not a git repository), the
+// checks must WARN that the comparison could not run — never PASS, which would
+// falsely advertise a fresh-repo state or a clean match.
+func TestParseChecksTreeReadError(t *testing.T) {
+	repo := parseCheckRepo(t, "not-a-repo")
+	raw, err := os.ReadFile(filepath.Join(repo, ".semver-trust", "policy.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pol, err := policy.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := &Env{
+		Repo: repo, Persona: Maintainer, At: time.Now(),
+		Policy: pol, PolicyRaw: raw, PolicyPath: ".semver-trust/policy.toml",
+	}
+
+	if r := checkPolicyParse(env); r.Severity != WARN {
+		t.Errorf("policy/parse (tree-read error) = %s %q, want WARN", r.Severity, r.Message)
+	}
+	if r := checkRegistryParse(env); r.Severity != WARN {
+		t.Errorf("registry/parse (tree-read error) = %s %q, want WARN", r.Severity, r.Message)
 	}
 }
 

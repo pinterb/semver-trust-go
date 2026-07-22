@@ -3,6 +3,7 @@
 package verify
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,13 +30,57 @@ func resolveCommit(r *git.Repository, rev string) (*object.Commit, error) {
 	return r.CommitObject(*hash)
 }
 
-// ReadTreeFile reads a file from a revision's tree — never the working tree.
+// ReadTreeFileIfPresent reads path from rev's tree for a drift comparison,
+// distinguishing "there is nothing committed to compare against" from a genuine
+// repository or object error:
+//
+//   - (data, true, nil)   path exists in rev's tree
+//   - (nil, false, nil)   rev does not resolve (e.g. no commits yet) or path is
+//                         absent from its tree — the expected fresh-repo states
+//   - (nil, false, err)   a real error: the repository will not open, an object
+//                         is unreadable or corrupt, or the blob read failed
+//
 // It is the P0 seam consumed by internal/preflight (doctor): the registry/policy
-// drift checks compare the working-tree file against the tree at HEAD, and every
-// other tree read doctor needs is already behind an exported seam
-// (LoadTrustMaterial, ClassifyCommit, MetaPolicyFromTree, AttestationVerifier).
-func ReadTreeFile(repoPath, rev, path string) ([]byte, error) {
-	return readTreeFile(repoPath, rev, path)
+// drift checks compare the working-tree file against the tree at HEAD, and only a
+// genuine error — not an absent HEAD or an as-yet-uncommitted file — should be
+// surfaced as a problem. Every other tree read doctor needs is already behind an
+// exported seam (LoadTrustMaterial, ClassifyCommit, MetaPolicyFromTree,
+// AttestationVerifier).
+func ReadTreeFileIfPresent(repoPath, rev, path string) (data []byte, present bool, err error) {
+	r, err := openRepo(repoPath)
+	if err != nil {
+		return nil, false, err
+	}
+	commit, err := resolveCommit(r, rev)
+	if err != nil {
+		if errors.Is(err, plumbing.ErrReferenceNotFound) {
+			return nil, false, nil // no HEAD yet — nothing committed to compare against
+		}
+		return nil, false, err
+	}
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, false, err
+	}
+	f, err := tree.File(path)
+	if err != nil {
+		if errors.Is(err, object.ErrFileNotFound) || errors.Is(err, object.ErrDirectoryNotFound) {
+			return nil, false, nil // path not in this tree — not yet committed
+		}
+		return nil, false, err
+	}
+	reader, err := f.Reader()
+	if err != nil {
+		return nil, false, err
+	}
+	data, err = io.ReadAll(reader)
+	if closeErr := reader.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return data, true, nil
 }
 
 // readTreeFile reads a file from a revision's tree — never the working tree

@@ -119,8 +119,16 @@ func checkPolicyParse(env *Env) Result {
 		return fail("no policy at "+env.PolicyPath,
 			"§10 step 1 (load policy)", "add "+env.PolicyPath)
 	}
-	head, err := verify.ReadTreeFile(env.Repo, "HEAD", env.PolicyPath)
+	head, present, err := verify.ReadTreeFileIfPresent(env.Repo, "HEAD", env.PolicyPath)
 	if err != nil {
+		// Not the fresh-repo case: the repository would not open, or an object
+		// was unreadable/corrupt. The comparison could not run, so say so with the
+		// error rather than falsely asserting either "matches HEAD" or "not yet
+		// committed".
+		return warn("policy parses, but its HEAD comparison could not run: "+err.Error(),
+			"inspect the repository/object error above, then re-run doctor")
+	}
+	if !present {
 		// No committed policy to compare against yet — a fresh repo with no
 		// commits, or a policy not yet in HEAD's tree. Parsing succeeded, but no
 		// drift check ran, so do not claim it matches HEAD.
@@ -155,8 +163,14 @@ func checkRegistryParse(env *Env) Result {
 		return fail("allowed_signers does not parse: "+err.Error(),
 			"§10 step 3 (verify signature)", "fix "+path)
 	}
-	head, err := verify.ReadTreeFile(env.Repo, "HEAD", path)
+	head, present, err := verify.ReadTreeFileIfPresent(env.Repo, "HEAD", path)
 	if err != nil {
+		// Not the fresh-repo case: the repository would not open, or an object was
+		// unreadable/corrupt. Surface it rather than claim a comparison happened.
+		return warn("allowed_signers parses, but its HEAD comparison could not run: "+err.Error(),
+			"inspect the repository/object error above, then re-run doctor")
+	}
+	if !present {
 		// No committed registry to compare against yet (no commits, or not yet in
 		// HEAD's tree). Parsing succeeded; no drift check ran.
 		return pass("allowed_signers parses (not yet committed — no HEAD version to compare against)")
