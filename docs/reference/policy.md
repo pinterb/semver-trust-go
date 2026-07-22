@@ -133,7 +133,9 @@ bot_accounts = ["noreply@github.com"]
   human. The canonical entry is GitHub's web-flow key identity
   (`noreply@github.com`), which signs web-UI merge commits: enrolling the key
   makes those merges *verifiable*, listing its identity here keeps them
-  honestly *agent-class* rather than silently human.
+  honestly *agent-class* rather than silently human. Omit it entirely if the
+  repository has no web-UI merges — a solo repo that merges locally and signs
+  has no machine signer to classify.
 
 File formats and enrollment flow live in
 [trust material](trust-material.md). Declaring these paths in the policy lets

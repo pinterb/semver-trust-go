@@ -1,10 +1,13 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Bootstrapping a new GitHub repository under SemVer-Trust
 
-This guide takes an empty directory to a verified, promotable first release.
-Every command block was executed as written, in order, and the output shown is
-real. You'll need git, `ssh-keygen`, and the `semver-trust` binary
-([install](../../README.md#install)); background concepts are in
+This guide takes an empty directory to a verified, promotable first release. The
+**local** command blocks were executed as written, in order, with real output;
+the **GitHub-side** steps (creating the repository, importing rulesets, repo
+settings — §5) touch a real account and are shown representatively. You'll need
+git, `ssh-keygen`, the `semver-trust` binary
+([install](../../README.md#install)), and — for the GitHub steps — the
+[`gh` CLI](https://cli.github.com); background concepts are in
 [concepts](../concepts.md).
 
 Greenfield is the easy case, and it's worth savoring why: **your history is
@@ -69,7 +72,11 @@ mkdir .semver-trust
 The minimal single-maintainer policy — `threshold = "T2"` because T2 is what
 one accountable human can honestly produce, and `required_level = "T2"` on the
 meta-paths so you can never lock yourself out (the full reasoning:
-[choosing threshold and strategy](../reference/policy.md#choosing-threshold-and-strategy)):
+[choosing threshold and strategy](../reference/policy.md#choosing-threshold-and-strategy)).
+`.github/rulesets/**` is in `[meta].paths` from the founding commit even though
+those files arrive in §5: they *are* the platform root of trust, so the commit
+that introduces them — and every later edit the drift check treats as
+authoritative — must itself reach `required_level`, not sneak in at T0:
 
 ```sh
 cat > .semver-trust/policy.toml <<'EOF'
@@ -79,7 +86,11 @@ threshold = "T2"
 strategy  = "demote"
 
 [meta]
-paths = [".semver-trust/**", ".github/workflows/**"]
+paths = [
+  ".semver-trust/**",
+  ".github/workflows/**",
+  ".github/rulesets/**",
+]
 required_level = "T2"
 
 [identity]
@@ -240,7 +251,7 @@ table in effect:
 ```console
 $ semver-trust policy validate --repo .
 policy .semver-trust/policy.toml is valid (schema 0.1)
-digest:      sha256:f99fd6fe3717fc9a2c3cc6a74b3c99eff8a11cfb8a9fd04b53fd070ad6d80b81
+digest:      sha256:ac8f26074370ef7b2d0e850d7a716ca801af2c9b8991d690f19e7959d5499dd5
 threshold:   T2
 strategy:    demote
 ...
@@ -285,25 +296,103 @@ Read that honestly: the unreviewed agent commit is T0, and weakest-link
 flooring makes the whole scope T0. Nothing is wrong — this is the system
 telling you what evidence exists so far.
 
-## 5. GitHub hardening
+## 5. Create the GitHub repository, then harden it
 
-Before the repository is shared, protect the branch so the platform can't
-undermine what verification assumes. The model this repository uses — two
-rulesets as committed JSON artifacts, one for history integrity (no
-force-push, no deletion, signatures required; no bypass for anyone) and one
-for the review gate (merge commits only, required checks; maintainer bypass
-for locally-signed merges) — is documented in
-[.github/rulesets/README.md](../../.github/rulesets/README.md), with importable
-JSON alongside. Two rules matter most:
+Everything so far is local. Create the remote and push — `gh` (the GitHub CLI)
+does both at once. This repository is private and single-maintainer:
 
-- **Merge commits only, created locally.** A web-UI merge is signed by
-  GitHub's key, not yours. Merge on your machine, signed and trailered, then
-  push — a small script like this repository's
-  [`scripts/merge-pr.sh`](../../scripts/merge-pr.sh) (check PR state,
-  `git merge --no-ff -S` with trailers, self-verify, push) keeps it one
-  command.
-- **No history rewriting on `main`, no exceptions** — verification walks that
-  history; nothing may edit it.
+```sh
+gh repo create <owner>/widget --private --source=. --remote=origin --push
+```
+
+That creates the repository, wires it as `origin`, and pushes `main` (use
+`--public` for an open project). Without `gh`: create an empty repository on
+github.com, then `git remote add origin git@github.com:<owner>/widget.git &&
+git push -u origin main`. The command blocks in this section touch a real GitHub
+account, so — unlike the local steps above — they are shown representatively;
+adapt the owner, name, and visibility to yours.
+
+### Register your commit key with GitHub
+
+GitHub marks a commit **Verified** only when the *account* carries its public key
+as a **signing** key — and the history-integrity ruleset below rejects every commit
+whose signature GitHub cannot verify. SemVer-Trust enrollment (§2) taught your
+*local* verifier to trust the key; it tells GitHub nothing. Register it once, as a
+signing key (this is separate from any authentication key —
+[GitHub's signing-key docs](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account?tool=cli)):
+
+```sh
+gh ssh-key add ~/.ssh/semver-trust-commit.pub --type signing --title "semver-trust commit signing"
+```
+
+For a GPG commit key, `gh gpg-key add <exported-public-key>.asc` instead. A key
+GitHub already shows as Verified on your commits (the reuse path in §1) needs
+nothing here. Skip this on the fresh-key path and the first push after the ruleset
+import is rejected — the platform rule doing its job.
+
+### Protect the branch
+
+Verification assumes the history on `main` is signed and unrewritten and that
+meta-path changes were reviewed — but only the *platform* enforces that between
+pushes. This repository commits its branch protection as two importable rulesets
+([.github/rulesets/README.md](../../.github/rulesets/README.md)); they target
+`~DEFAULT_BRANCH`, so they drop into any new repository unchanged.
+
+> **Plan prerequisite:** rulesets on a **private** repository require a paid plan
+> (Pro, Team, or Enterprise Cloud); GitHub Free offers them only on **public**
+> repositories
+> ([ruleset availability](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets)).
+> On Free with a private repo, make the repo public, upgrade, or fall back to
+> classic branch protection (Settings → Branches — configured by hand, not
+> imported from these JSON files, and without the merge-method restriction).
+
+Commit the rulesets (trust-sensitive config — path-scope the add), push, and
+import:
+
+```sh
+mkdir -p .github/rulesets    # then copy the two branch-main-*.json files in
+git add .github/rulesets && git commit -m "chore: branch rulesets" -m "Provenance: human"
+git push origin main
+gh api repos/<owner>/widget/rulesets --input .github/rulesets/branch-main-history-integrity.json
+gh api repos/<owner>/widget/rulesets --input .github/rulesets/branch-main-review-gate.json
+```
+
+(Or in the UI: **Settings → Rules → Rulesets → New ruleset → Import a
+ruleset**.) `scripts/check-rulesets.py` compares the live rulesets against these
+files and fails on drift, so the committed JSON stays the source of truth. The
+two split by bypass policy:
+
+- **History integrity** — no force-push, no deletion, **signed commits
+  required**; bypass for nobody. The verifiable history is absolute.
+- **Review gate** — a pull request required, merge commits only, required checks
+  `ci` and `commit-hygiene`; bypass for the **Admin** role, so you can push a
+  locally-created signed merge while the bypass-less history rules still bind
+  every commit.
+
+**Solo note:** the review gate's `required_approving_review_count` is **0** — a
+PR is required, but a GitHub *approval* is not, because your trust signal is a
+**signed review attestation** (`attest review`, §8), not the green checkmark. As
+the sole maintainer you review your own agent-assisted work to T2 (spec
+repository ADR-025), and the Admin bypass lets you push the signed merge.
+Confirm both imports took effect — a test push the rules reject is the
+confirmation.
+
+### Merge and Actions settings
+
+- **Merge commits only** (Settings → General → Pull Requests): allow merge
+  commits, **disable squash and rebase merging**. A web-UI merge is signed by
+  GitHub's key, not yours — so merge on your machine, signed and trailered, then
+  push; a small script like this repository's
+  [`scripts/merge-pr.sh`](../../scripts/merge-pr.sh) keeps it one command. This
+  is why the policy above leaves `[identity.agent] bot_accounts` **unset**: with
+  no web-UI merges there is no `noreply@github.com`-signed commit to classify.
+  If you *will* use the merge button, add it and enroll GitHub's web-flow key
+  ([adopting on an existing repository §3](adopt-legacy-github.md#3-the-web-flow-key-specifically)).
+- **Enable GitHub Actions** (Settings → Actions → General) so the verify and
+  commit-hygiene checks below run on pull requests; a release workflow, if you
+  add one, needs `contents: write` and — for keyless cosign — `id-token: write`.
+- **No history rewriting on `main`, ever** — verification walks that history.
+  Keep "require linear history" *off*: this repository is merge-commits-only.
 
 ## 6. CI
 
